@@ -27,6 +27,18 @@ export const BASE_TESTNET = {
   blockExplorerUrls: ["https://sepolia.basescan.org"],
 };
 
+export const SOMNIA_TESTNET = {
+  chainId: "0xC4A8", // 50312 in hex (Somnia Dream Testnet)
+  chainName: "Somnia Dream",
+  nativeCurrency: {
+    name: "STT",
+    symbol: "STT",
+    decimals: 18,
+  },
+  rpcUrls: ["https://dream-rpc.somnia.network"],
+  blockExplorerUrls: ["https://dream.somnia.network"],
+};
+
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export const CONTRACTS = {

@@ -45,10 +45,12 @@
     "@radix-ui/react-tooltip": "1.1.6",
     "@reown/appkit": "^1.8.11",
     "@reown/appkit-adapter-ethers": "^1.8.11",
+    "@somnia-chain/streams": "^0.11.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "date-fns": "4.1.0",
+    "dotenv": "^17.2.3",
     "embla-carousel-react": "8.5.1",
     "ethers": "latest",
     "framer-motion": "latest",
@@ -67,6 +69,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
+    "viem": "^2.37.13",
     "zod": "3.25.76"
   },
   "devDependencies": {

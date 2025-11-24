@@ -17,8 +17,15 @@ const metadata = {
   icons: ["/secureflow-logo.svg"],
 };
 
-// Define networks - Base is first (primary network)
+// Define networks - Somnia Testnet is first (primary network for hackathon)
 const networks = [
+  {
+    id: 50312,
+    name: "Somnia Dream Testnet",
+    currency: "STT",
+    explorerUrl: "https://dream.somnia.network",
+    rpcUrl: "https://dream-rpc.somnia.network",
+  },
   {
     id: 8453,
     name: "Base",

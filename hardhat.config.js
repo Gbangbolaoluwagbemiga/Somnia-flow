@@ -83,6 +83,13 @@ module.exports = {
       maxFeePerGas: 10000000000, // 10 gwei
       maxPriorityFeePerGas: 1000000000, // 1 gwei
     },
+    somniaTestnet: {
+      url: process.env.SOMNIA_RPC_URL || "https://dream-rpc.somnia.network",
+      accounts:
+        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+      chainId: 50312, // Somnia Dream Testnet chain ID
+      gas: 8000000,
+    },
   },
   paths: {
     sources: "./contracts",
