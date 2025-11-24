@@ -98,7 +98,11 @@ module.exports = {
     artifacts: "./artifacts",
   },
   etherscan: {
-    apiKey: process.env.BASESCAN_API_KEY || "",
+    apiKey: {
+      base: process.env.BASESCAN_API_KEY || "",
+      baseSepolia: process.env.BASESCAN_API_KEY || "",
+      somniaTestnet: process.env.SOMNIA_API_KEY || "empty",
+    },
     customChains: [
       {
         network: "base",
@@ -114,6 +118,14 @@ module.exports = {
         urls: {
           apiURL: "https://api-sepolia.basescan.org/v2/api",
           browserURL: "https://sepolia.basescan.org",
+        },
+      },
+      {
+        network: "somniaTestnet",
+        chainId: 50312,
+        urls: {
+          apiURL: "https://shannon-explorer.somnia.network/api",
+          browserURL: "https://dream.somnia.network",
         },
       },
     ],

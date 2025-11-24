@@ -42,16 +42,20 @@ export const SOMNIA_TESTNET = {
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export const CONTRACTS = {
+  // Somnia Dream Testnet - DEPLOYED ✅ (Hackathon Deployment)
+  SECUREFLOW_ESCROW_SOMNIA: "0x3f00dB811A4Ab36e7a953a9C9bC841499fC2EAF6", // SecureFlow on Somnia Dream Testnet
+  MOCK_ERC20_SOMNIA: "0x7e7b5dbaE3aDb3D94a27DCfB383bDB98667145E6", // MockERC20 on Somnia Dream Testnet
+
   // Base Mainnet - DEPLOYED ✅ (Updated with Rating & Arbiter Features)
   SECUREFLOW_ESCROW_MAINNET: "0xf87ED6B0B54f6B47c59F7e7a0D3C9Bb0F4d236c7", // SecureFlow on Base Mainnet
   USDC_MAINNET: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
   SECUREFLOW_TOKEN_MAINNET: "0xdc2D33270ACfC4D573440B9f5648B0C915F44126", // SecureFlow Token (STK) on Base Mainnet
 
-  // Default contracts (used by frontend) - Base Mainnet
-  SECUREFLOW_ESCROW: "0xf87ED6B0B54f6B47c59F7e7a0D3C9Bb0F4d236c7", // SecureFlow on Base Mainnet
-  USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
-  SECUREFLOW_TOKEN: "0xdc2D33270ACfC4D573440B9f5648B0C915F44126", // SecureFlow Token (STK) on Base Mainnet
-  MOCK_ERC20: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
+  // Default contracts (used by frontend) - Somnia Testnet for hackathon
+  SECUREFLOW_ESCROW: "0x3f00dB811A4Ab36e7a953a9C9bC841499fC2EAF6", // SecureFlow on Somnia Dream Testnet
+  USDC: "0x7e7b5dbaE3aDb3D94a27DCfB383bDB98667145E6", // MockERC20 on Somnia (for testing)
+  SECUREFLOW_TOKEN: "0x7e7b5dbaE3aDb3D94a27DCfB383bDB98667145E6", // MockERC20 on Somnia (for testing)
+  MOCK_ERC20: "0x7e7b5dbaE3aDb3D94a27DCfB383bDB98667145E6", // MockERC20 on Somnia Dream Testnet
 
   BASESCAN_API_KEY: process.env.BASESCAN_API_KEY || "",
 };

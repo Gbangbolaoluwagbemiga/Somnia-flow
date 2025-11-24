@@ -1,10 +1,10 @@
 {
-  "network": "base",
-  "chainId": "8453",
+  "network": "somniaTestnet",
+  "chainId": "50312",
   "deployer": "0x3Be7fbBDbC73Fc4731D60EF09c4BA1A94DC58E41",
   "contracts": {
-    "SecureFlow": "0xf87ED6B0B54f6B47c59F7e7a0D3C9Bb0F4d236c7",
-    "Token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    "SecureFlow": "0x3f00dB811A4Ab36e7a953a9C9bC841499fC2EAF6",
+    "Token": "0x7e7b5dbaE3aDb3D94a27DCfB383bDB98667145E6"
   },
   "features": [
     "🚀 MODULAR ARCHITECTURE - Clean separation of concerns",
@@ -17,7 +17,7 @@
     "🛡️ ANTI-GAMING - Minimum value thresholds",
     "📈 SCALABLE - Gas optimized modular design"
   ],
-  "deploymentTime": "2025-11-24T08:50:35.303Z",
+  "deploymentTime": "2025-11-24T22:59:59.326Z",
   "abi": [
     "constructor(address,address,uint256)",
     "error AlreadyApplied()",
@@ -167,11 +167,28 @@
     "function withdrawFees(address)",
     "receive() payable"
   ],
-  "tokenAbi": null,
-  "SecureFlowToken": {
-    "address": "0xdc2D33270ACfC4D573440B9f5648B0C915F44126",
-    "name": "SecureFlow",
-    "symbol": "STK",
-    "totalSupply": "1000000000000000000000000000"
-  }
+  "tokenAbi": [
+    "constructor(string,string,uint256)",
+    "error InvalidShortString()",
+    "error StringTooLong(string)",
+    "event Approval(address indexed,address indexed,uint256)",
+    "event EIP712DomainChanged()",
+    "event Transfer(address indexed,address indexed,uint256)",
+    "function DOMAIN_SEPARATOR() view returns (bytes32)",
+    "function allowance(address,address) view returns (uint256)",
+    "function approve(address,uint256) returns (bool)",
+    "function balanceOf(address) view returns (uint256)",
+    "function decimals() view returns (uint8)",
+    "function decreaseAllowance(address,uint256) returns (bool)",
+    "function eip712Domain() view returns (bytes1,string,string,uint256,address,bytes32,uint256[])",
+    "function increaseAllowance(address,uint256) returns (bool)",
+    "function mint(address,uint256)",
+    "function name() view returns (string)",
+    "function nonces(address) view returns (uint256)",
+    "function permit(address,address,uint256,uint256,uint8,bytes32,bytes32)",
+    "function symbol() view returns (string)",
+    "function totalSupply() view returns (uint256)",
+    "function transfer(address,uint256) returns (bool)",
+    "function transferFrom(address,address,uint256) returns (bool)"
+  ]
 }

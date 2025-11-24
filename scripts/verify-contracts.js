@@ -107,6 +107,8 @@ async function main() {
     explorerUrl = "https://basescan.org/address/";
   } else if (chainIdNum === 84532) {
     explorerUrl = "https://sepolia.basescan.org/address/";
+  } else if (chainIdNum === 50312) {
+    explorerUrl = "https://dream.somnia.network/address/";
   }
 
   if (explorerUrl) {
