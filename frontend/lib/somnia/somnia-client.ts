@@ -1,24 +1,30 @@
 /**
  * Somnia Data Streams Client
- * 
+ *
  * Handles initialization and management of Somnia Data Streams SDK
  * for publishing and subscribing to real-time data.
  */
 
-import { SDK, SchemaEncoder, zeroBytes32 } from '@somnia-chain/streams';
-import { createPublicClient, createWalletClient, http, type Address, type Hex } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { defineChain } from 'viem';
+import { SDK, SchemaEncoder, zeroBytes32 } from "@somnia-chain/streams";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  type Address,
+  type Hex,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { defineChain } from "viem";
 
 // Define Somnia Dream Testnet
 export const somniaTestnet = defineChain({
   id: 50312,
-  name: 'Somnia Dream',
-  network: 'somnia-dream',
-  nativeCurrency: { name: 'STT', symbol: 'STT', decimals: 18 },
+  name: "Somnia Dream",
+  network: "somnia-dream",
+  nativeCurrency: { name: "STT", symbol: "STT", decimals: 18 },
   rpcUrls: {
-    default: { http: ['https://dream-rpc.somnia.network'] },
-    public: { http: ['https://dream-rpc.somnia.network'] },
+    default: { http: ["https://dream-rpc.somnia.network"] },
+    public: { http: ["https://dream-rpc.somnia.network"] },
   },
 });
 
@@ -34,7 +40,7 @@ export function initSomniaSDKPublic(rpcUrl?: string): SDK {
     return sdkInstance;
   }
 
-  const rpc = rpcUrl || 'https://dream-rpc.somnia.network';
+  const rpc = rpcUrl || "https://dream-rpc.somnia.network";
   publicClientInstance = createPublicClient({
     chain: somniaTestnet,
     transport: http(rpc),
@@ -55,7 +61,7 @@ export function initSomniaSDKWithWallet(
   privateKey: `0x${string}`,
   rpcUrl?: string
 ): SDK {
-  const rpc = rpcUrl || 'https://dream-rpc.somnia.network';
+  const rpc = rpcUrl || "https://dream-rpc.somnia.network";
   const account = privateKeyToAccount(privateKey);
 
   walletClientInstance = createWalletClient({
@@ -106,14 +112,16 @@ export async function registerSecureFlowSchemas(
     ? initSomniaSDKWithWallet(privateKey, rpcUrl)
     : getSomniaSDK();
 
+  // Import schemas statically
+  const schemasModule = await import("./schemas");
   const {
     JOB_POSTING_SCHEMA,
     MILESTONE_UPDATE_SCHEMA,
     ESCROW_STATUS_SCHEMA,
     APPLICATION_SCHEMA,
     DISPUTE_SCHEMA,
-  } = await import('./schemas');
-  const { SCHEMA_NAMES } = await import('./schemas');
+    SCHEMA_NAMES,
+  } = schemasModule;
 
   const schemas = [
     {
@@ -146,15 +154,14 @@ export async function registerSecureFlowSchemas(
   try {
     const txHash = await sdk.streams.registerDataSchemas(schemas, true);
     if (txHash) {
-      console.log('✅ SecureFlow schemas registered:', txHash);
+      console.log("✅ SecureFlow schemas registered:", txHash);
     } else {
-      console.log('ℹ️ Schemas already registered');
+      console.log("ℹ️ Schemas already registered");
     }
   } catch (error) {
-    console.error('Error registering schemas:', error);
+    console.error("Error registering schemas:", error);
     throw error;
   }
 }
 
 export { somniaTestnet };
-
