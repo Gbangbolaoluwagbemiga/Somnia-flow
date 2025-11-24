@@ -7,6 +7,7 @@ import { Web3Provider } from "@/contexts/web3-context";
 import { SmartAccountProvider } from "@/contexts/smart-account-context";
 import { DelegationProvider } from "@/contexts/delegation-context";
 import { NotificationProvider } from "@/contexts/notification-context";
+import { SomniaStreamsProvider } from "@/contexts/somnia-streams-context";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/toaster";
 import { Suspense } from "react";
@@ -70,15 +71,17 @@ export default function RootLayout({
             <AppKit>
               <Suspense fallback={<div>Loading...</div>}>
                 <Web3Provider>
-                  <DelegationProvider>
-                    <SmartAccountProvider>
-                      <NotificationProvider>
-                        <Navbar />
-                        <main className="pt-16">{children}</main>
-                        <Toaster />
-                      </NotificationProvider>
-                    </SmartAccountProvider>
-                  </DelegationProvider>
+                  <SomniaStreamsProvider>
+                    <DelegationProvider>
+                      <SmartAccountProvider>
+                        <NotificationProvider>
+                          <Navbar />
+                          <main className="pt-16">{children}</main>
+                          <Toaster />
+                        </NotificationProvider>
+                      </SmartAccountProvider>
+                    </DelegationProvider>
+                  </SomniaStreamsProvider>
                 </Web3Provider>
               </Suspense>
             </AppKit>

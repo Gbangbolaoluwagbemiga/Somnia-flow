@@ -3,10 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Solidity](https://img.shields.io/badge/Solidity-^0.8.19-blue)](https://soliditylang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
+[![Somnia Data Streams](https://img.shields.io/badge/Somnia-Data%20Streams-purple)](https://docs.somnia.network)
 
 ## 🚀 Overview
 
-SecureFlow is a comprehensive decentralized platform combining escrow services with a freelance marketplace, built on Celo blockchain. Features gasless transactions through MetaMask Smart Accounts, multi-arbiter dispute resolution, and reputation systems.
+SecureFlow is a comprehensive decentralized platform combining escrow services with a freelance marketplace, **powered by Somnia Data Streams** for real-time, reactive updates. Built on **Somnia Testnet**, it features gasless transactions, multi-arbiter dispute resolution, reputation systems, and **real-time data streaming** for instant notifications and live updates.
+
+> **Built for Somnia Data Streams Mini Hackathon (Nov 4-15, 2025)**
 
 ## ✨ Key Features
 
@@ -23,8 +26,9 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 - **Milestone Management**: Submit, approve, reject, dispute milestones
 - **Job Applications**: Freelancers apply to open jobs
 - **Dispute Resolution**: Time-limited dispute windows with arbiter consensus
-- **Real-time Notifications**: In-app notification system
+- **Real-time Notifications**: Powered by Somnia Data Streams for instant, reactive updates
 - **Client Feedback**: Rejection reasons and improvement suggestions
+- **Live Data Streaming**: Real-time updates for job postings, milestones, escrow status, and applications using Somnia Data Streams SDK
 
 ### 🛡️ Security & Trust
 
@@ -43,10 +47,17 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 ├── frontend/                   # Next.js application
 │   ├── app/                    # App router pages
 │   ├── components/             # UI components
-│   └── contexts/               # React contexts
+│   ├── contexts/               # React contexts
+│   │   └── somnia-streams-context.tsx  # Somnia Data Streams integration
+│   └── lib/
+│       └── somnia/             # Somnia Data Streams utilities
+│           ├── schemas.ts      # Data schemas for streaming
+│           ├── somnia-client.ts # SDK initialization
+│           └── publisher.ts   # Data publishing functions
 ├── scripts/
 │   ├── deploy.js               # Contract deployment
-│   └── deploy-paymaster.js     # Paymaster deployment
+│   ├── deploy-paymaster.js     # Paymaster deployment
+│   └── register-somnia-schemas.js # Register SDS schemas
 └── test/
     └── SecureFlow.test.js      # Test suite
 ```
@@ -56,8 +67,9 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 ### Prerequisites
 
 - Node.js 18+
-- MetaMask wallet
-- Celo mainnet access
+- MetaMask wallet (or compatible Web3 wallet)
+- Somnia Testnet (Dream) access
+- STT test tokens (request from [Somnia Telegram](https://t.me/+XHq0F0JXMyhmMzM0))
 
 ### Installation
 
@@ -74,29 +86,40 @@ npm install
 2. **Environment setup**
 
 ```bash
-# Copy environment files
-cp .env.example .env
-cp frontend/.env.example frontend/.env.local
+# Create .env file in root directory
+cat > .env << EOF
+PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+SOMNIA_RPC_URL=https://dream-rpc.somnia.network
+EOF
 
-# Configure your environment variables
+# Create frontend/.env.local
+cat > frontend/.env.local << EOF
+NEXT_PUBLIC_SOMNIA_RPC_URL=https://dream-rpc.somnia.network
+EOF
 ```
 
-3. **Deploy contracts**
+3. **Register Somnia Data Streams Schemas**
 
 ```bash
-# Deploy to Celo testnet
-npx hardhat run scripts/deploy.js --network celoTestnet
-
-# Deploy to Celo mainnet
-npx hardhat run scripts/deploy-minimal.js --network celo
+# Register all SecureFlow schemas on Somnia Testnet
+node scripts/register-somnia-schemas.js
 ```
 
-4. **Start frontend**
+4. **Deploy contracts to Somnia Testnet**
+
+```bash
+# Deploy to Somnia Dream Testnet
+npx hardhat run scripts/deploy.js --network somniaTestnet
+```
+
+5. **Start frontend**
 
 ```bash
 cd frontend
 npm run dev
 ```
+
+The app will automatically connect to Somnia Testnet and enable real-time data streaming.
 
 ## 🎯 User Workflows
 
@@ -155,19 +178,24 @@ vercel --prod
 
 ## 📊 Current Deployment
 
-### Celo Mainnet (Active)
+### Somnia Dream Testnet (Hackathon Deployment) 🎯
+
+- **Network**: Somnia Dream Testnet (Chain ID: 50312)
+- **RPC URL**: https://dream-rpc.somnia.network
+- **Explorer**: https://dream.somnia.network
+- **Status**: ✅ Deployed for Somnia Data Streams Mini Hackathon
+- **Native Token**: STT (Somnia Test Token)
+
+> **Note**: This project is configured for Somnia Testnet as part of the Somnia Data Streams Mini Hackathon (Nov 4-15, 2025)
+
+### Previous Deployments
+
+#### Celo Mainnet (Legacy)
 
 - **SecureFlow Contract**: `0x1173Bcc9183f29aFbB6f4C7E3c0b25476D3daF0F`
 - **cUSD Token**: `0x765DE816845861e75A25fCA122bb6898B8B1282a`
 - **Network**: Celo Mainnet (Chain ID: 42220)
 - **Explorer**: https://celoscan.io/address/0x1173Bcc9183f29aFbB6f4C7E3c0b25476D3daF0F
-- **Status**: ✅ Production Ready
-
-### Celo Testnet (Alfajores)
-
-- **Network**: Celo Alfajores (Chain ID: 44787)
-- **Explorer**: https://alfajores.celoscan.io/
-- **Status**: Available for testing
 
 ## 🔧 Configuration
 
