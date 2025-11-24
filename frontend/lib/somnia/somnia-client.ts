@@ -163,5 +163,3 @@ export async function registerSecureFlowSchemas(
     throw error;
   }
 }
-
-export { somniaTestnet };
