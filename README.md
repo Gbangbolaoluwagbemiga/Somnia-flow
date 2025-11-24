@@ -98,24 +98,22 @@ NEXT_PUBLIC_SOMNIA_RPC_URL=https://dream-rpc.somnia.network
 EOF
 ```
 
-3. **Register Somnia Data Streams Schemas**
+3. **Register Somnia Data Streams Schemas** ✅ (Already Done)
 
 ```bash
 # Register all SecureFlow schemas on Somnia Testnet
-# Option 1: Using ts-node (if installed)
-npx ts-node scripts/register-somnia-schemas.ts
-
-# Option 2: Using hardhat
-npx hardhat run scripts/register-somnia-schemas.ts --network somniaTestnet
+node scripts/register-somnia-schemas.js
 ```
 
-This registers 5 schemas:
+**Status**: All 5 schemas have been registered successfully!
 
-- `secureflow_job_posting` - For job posting events
-- `secureflow_milestone_update` - For milestone status changes
-- `secureflow_escrow_status` - For escrow status updates
-- `secureflow_application` - For job applications
-- `secureflow_dispute` - For dispute events
+- ✅ `secureflow_job_posting` - For job posting events
+- ✅ `secureflow_milestone_update` - For milestone status changes
+- ✅ `secureflow_escrow_status` - For escrow status updates
+- ✅ `secureflow_application` - For job applications
+- ✅ `secureflow_dispute` - For dispute events
+
+**Registration TX**: [`0x79a60fa10ce828d1221b32f099ca5ee8a77b41c04e674474ed6caffb92b11d92`](https://dream.somnia.network/tx/0x79a60fa10ce828d1221b32f099ca5ee8a77b41c04e674474ed6caffb92b11d92)
 
 4. **Deploy contracts to Somnia Testnet**
 
@@ -195,8 +193,25 @@ vercel --prod
 - **Network**: Somnia Dream Testnet (Chain ID: 50312)
 - **RPC URL**: https://dream-rpc.somnia.network
 - **Explorer**: https://dream.somnia.network
-- **Status**: ✅ Deployed for Somnia Data Streams Mini Hackathon
+- **Status**: ✅ Deployed & Verified for Somnia Data Streams Mini Hackathon
 - **Native Token**: STT (Somnia Test Token)
+
+#### Deployed Contracts
+
+- **SecureFlow**: [`0x3f00dB811A4Ab36e7a953a9C9bC841499fC2EAF6`](https://dream.somnia.network/address/0x3f00dB811A4Ab36e7a953a9C9bC841499fC2EAF6#code)
+- **MockERC20**: [`0x7e7b5dbaE3aDb3D94a27DCfB383bDB98667145E6`](https://dream.somnia.network/address/0x7e7b5dbaE3aDb3D94a27DCfB383bDB98667145E6#code)
+
+#### Registered Schemas ✅
+
+All 5 Somnia Data Streams schemas have been registered:
+
+- `secureflow_job_posting` - Job posting events
+- `secureflow_milestone_update` - Milestone status changes
+- `secureflow_escrow_status` - Escrow status updates
+- `secureflow_application` - Job applications
+- `secureflow_dispute` - Dispute events
+
+**Registration TX**: [`0x79a60fa10ce828d1221b32f099ca5ee8a77b41c04e674474ed6caffb92b11d92`](https://dream.somnia.network/tx/0x79a60fa10ce828d1221b32f099ca5ee8a77b41c04e674474ed6caffb92b11d92)
 
 > **Note**: This project is configured for Somnia Testnet as part of the Somnia Data Streams Mini Hackathon (Nov 4-15, 2025)
 

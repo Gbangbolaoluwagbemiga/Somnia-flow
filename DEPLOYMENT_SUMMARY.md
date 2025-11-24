@@ -64,8 +64,9 @@ The frontend has been updated to use these deployed addresses:
 ### Next Steps
 
 1. ✅ Contracts deployed and verified
-2. ⏳ Register Somnia Data Streams schemas (run `npx ts-node scripts/register-somnia-schemas.ts`)
-3. ⏳ Test the application on Somnia Testnet
+2. ✅ Somnia Data Streams schemas registered
+   - Registration TX: https://dream.somnia.network/tx/0x79a60fa10ce828d1221b32f099ca5ee8a77b41c04e674474ed6caffb92b11d92
+3. ⏳ Test the application on Somnia Testnet (see TESTING_GUIDE.md)
 4. ⏳ Create demo video for hackathon submission
 
 ### Verification Commands

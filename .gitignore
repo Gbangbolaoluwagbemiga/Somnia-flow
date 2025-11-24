@@ -67,3 +67,11 @@ check-colors.sh
 fix-syntax.sh
 deployed-addresses.json
 .vercel
+
+
+TESTING_GUIDE.md
+DEPLOYMENT_SUMMARY.md
+SOMNIA_INTEGRATION.md
+VERCEL_SETUP.md
+NEXT_STEPS.md
+HACKATHON_CHECKLIST.md
