@@ -19,7 +19,7 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 - **Gasless Transactions**: MetaMask Smart Account integration for zero-fee transactions
 - **Multi-Arbiter Consensus**: 1-5 arbiters with quorum-based voting
 - **Reputation System**: Anti-gaming reputation tracking
-- **Native & ERC20 Support**: CELO and whitelisted ERC20 tokens (cUSD on Celo)
+- **Native & ERC20 Support**: ETH and whitelisted ERC20 tokens on Somnia
 
 ### 🎯 Advanced Features
 
@@ -69,7 +69,7 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 - Node.js 18+
 - MetaMask wallet (or compatible Web3 wallet)
 - Somnia Testnet (Dream) access
-- STT test tokens (request from [Somnia Telegram](https://t.me/+XHq0F0JXMyhmMzM0))
+- ETH test tokens (request from [Somnia Telegram](https://t.me/+XHq0F0JXMyhmMzM0))
 
 ### Installation
 
@@ -168,11 +168,8 @@ npm test
 ### Smart Contracts
 
 ```bash
-# Deploy to Celo testnet
-npx hardhat run scripts/deploy.js --network celoTestnet
-
-# Deploy to Celo mainnet
-npx hardhat run scripts/deploy-minimal.js --network celo
+# Deploy to Somnia Testnet
+npx hardhat run scripts/deploy.js --network somniaTestnet
 ```
 
 ### Frontend (Vercel)
@@ -194,7 +191,7 @@ vercel --prod
 - **RPC URL**: https://dream-rpc.somnia.network
 - **Explorer**: https://dream.somnia.network
 - **Status**: ✅ Deployed & Verified for Somnia Data Streams Mini Hackathon
-- **Native Token**: STT (Somnia Test Token)
+- **Native Token**: ETH
 
 #### Deployed Contracts
 
@@ -240,11 +237,10 @@ function revokeArbiter(address arbiter) external onlyOwner
 ### Frontend Configuration
 
 ```typescript
-// Contract addresses (Celo Mainnet)
+// Contract addresses (Somnia Testnet)
 export const CONTRACTS = {
-  SECUREFLOW_ESCROW: "0x1173Bcc9183f29aFbB6f4C7E3c0b25476D3daF0F",
-  CUSD_MAINNET: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
-  USDC_MAINNET: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+  SECUREFLOW_ESCROW: "0x3f00dB811A4Ab36e7a953a9C9bC841499fC2EAF6",
+  MOCK_ERC20: "0x7e7b5dbaE3aDb3D94a27DCfB383bDB98667145E6",
 };
 ```
 

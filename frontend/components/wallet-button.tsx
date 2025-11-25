@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useAppKit } from "@reown/appkit/react";
 import { useState } from "react";
+import { SOMNIA_TESTNET } from "@/lib/web3/config";
 
 export function WalletButton() {
   const { wallet } = useWeb3();
@@ -47,7 +48,10 @@ export function WalletButton() {
           )}
         </div>
 
-        <span>{Number(wallet.balance).toFixed(3)} ETH</span>
+        <span>
+          {Number(wallet.balance).toFixed(3)}{" "}
+          {SOMNIA_TESTNET.nativeCurrency.symbol}
+        </span>
         <span className="text-muted-foreground">·</span>
 
         {/* Dynamic wallet avatar (Effigy gradient orb) */}

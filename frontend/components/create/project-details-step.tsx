@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Coins } from "lucide-react";
+import { SOMNIA_TESTNET } from "@/lib/web3/config";
 import {
   Select,
   SelectContent,
@@ -175,7 +176,7 @@ export function ProjectDetailsStep({
               <p className="text-xs text-muted-foreground mt-1">
                 {formData.isOpenJob
                   ? "Leave empty for open job applications"
-                  : "Valid Base address required for direct escrow"}
+                  : "Valid Somnia address required for direct escrow"}
               </p>
             )}
           </div>
@@ -190,7 +191,9 @@ export function ProjectDetailsStep({
               onChange={(e) => onUpdate({ useNativeToken: e.target.checked })}
               className="rounded"
             />
-            <Label htmlFor="useNativeToken">Use Native Token (ETH)</Label>
+            <Label htmlFor="useNativeToken">
+              Use Native Token ({SOMNIA_TESTNET.nativeCurrency.symbol})
+            </Label>
           </div>
 
           {!formData.useNativeToken && (
@@ -226,24 +229,30 @@ export function ProjectDetailsStep({
                           const displayName = token.name || "Unknown Token";
                           const displaySymbol = token.symbol || "???";
                           const shortAddress = token.address
-                            ? `${token.address.slice(0, 6)}...${token.address.slice(-4)}`
+                            ? `${token.address.slice(
+                                0,
+                                6
+                              )}...${token.address.slice(-4)}`
                             : "0x...";
 
-                        return (
-                          <SelectItem key={token.address} value={token.address}>
-                            <span className="font-medium">{displayName}</span>
-                            {token.symbol && (
-                              <span className="font-normal">
-                                {" "}
-                                ({displaySymbol})
+                          return (
+                            <SelectItem
+                              key={token.address}
+                              value={token.address}
+                            >
+                              <span className="font-medium">{displayName}</span>
+                              {token.symbol && (
+                                <span className="font-normal">
+                                  {" "}
+                                  ({displaySymbol})
+                                </span>
+                              )}
+                              <span className="text-xs text-muted-foreground ml-2">
+                                {shortAddress}
                               </span>
-                            )}
-                            <span className="text-xs text-muted-foreground ml-2">
-                              {shortAddress}
-                            </span>
-                          </SelectItem>
-                        );
-                      })
+                            </SelectItem>
+                          );
+                        })
                     ) : (
                       <SelectItem value="loading" disabled>
                         Loading tokens...

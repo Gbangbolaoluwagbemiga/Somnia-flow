@@ -58,22 +58,6 @@ module.exports = {
       gas: 8000000,
       // Let ethers automatically determine gas price for Celo
     },
-    base: {
-      url: "https://mainnet.base.org",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
-      chainId: 8453, // Base mainnet chain ID
-      gas: 2000000, // Further reduced gas limit
-      gasPrice: 1000000, // 0.001 gwei (minimum gas price)
-    },
-    baseTestnet: {
-      url: process.env.BASE_TESTNET_RPC_URL || "https://sepolia.base.org",
-      accounts:
-        process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
-      chainId: 84532, // Base testnet chain ID
-      gas: 8000000, // Higher gas limit
-      gasPrice: 1000000000, // 1 gwei
-    },
     monad: {
       url: process.env.MONAD_RPC_URL || "https://testnet-rpc.monad.xyz",
       accounts:
@@ -99,27 +83,9 @@ module.exports = {
   },
   etherscan: {
     apiKey: {
-      base: process.env.BASESCAN_API_KEY || "",
-      baseSepolia: process.env.BASESCAN_API_KEY || "",
       somniaTestnet: process.env.SOMNIA_API_KEY || "empty",
     },
     customChains: [
-      {
-        network: "base",
-        chainId: 8453,
-        urls: {
-          apiURL: "https://api.basescan.org/v2/api",
-          browserURL: "https://basescan.org",
-        },
-      },
-      {
-        network: "baseSepolia",
-        chainId: 84532,
-        urls: {
-          apiURL: "https://api-sepolia.basescan.org/v2/api",
-          browserURL: "https://sepolia.basescan.org",
-        },
-      },
       {
         network: "somniaTestnet",
         chainId: 50312,

@@ -15,11 +15,11 @@ async function main() {
   let tokenAbi;
   let mockTokenAddress = null;
 
-  if (hre.network.name === "base") {
-    // USDC on Base mainnet: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
-    tokenAddress = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-    tokenName = "USDC";
-    console.log("✅ Using USDC on Base mainnet:", tokenAddress);
+  if (hre.network.name === "somniaTestnet") {
+    // Use deployed MockERC20 on Somnia Testnet
+    tokenAddress = "0x7e7b5dbaE3aDb3D94a27DCfB383bDB98667145E6";
+    tokenName = "MockERC20";
+    console.log("✅ Using MockERC20 on Somnia Testnet:", tokenAddress);
   } else {
     // Deploy MockERC20 token for testing on other networks
     console.log("\n📦 Deploying MockERC20 token...");
@@ -46,7 +46,7 @@ async function main() {
   const platformFeeBP = 0; // 0% fees for hackathon demo
 
   const secureFlow = await SecureFlow.deploy(
-    tokenAddress, // token address (USDC on Base or MockERC20 on testnets)
+    tokenAddress, // token address (MockERC20 on Somnia Testnet or other networks)
     feeCollector, // feeCollector
     platformFeeBP // platformFeeBP
   );

@@ -51,7 +51,8 @@ const metadata = {
 
 // Somnia Dream Testnet - proper Wagmi/Viem format for AppKit
 const somniaTestnet = {
-  chainId: 50312,
+  id: 50312, // Use 'id' instead of 'chainId' for AppKit compatibility
+  chainId: 50312, // Keep for compatibility
   name: "Somnia Dream Testnet",
   nativeCurrency: {
     name: "STT",
@@ -73,33 +74,35 @@ const somniaTestnet = {
     },
   },
   testnet: true,
-} as any; // AppKit accepts this format at runtime
+};
 
 console.log("[AppKit] Initializing AppKit with Somnia Dream Testnet only");
 
-// Create modal with proper config
-try {
-  createAppKit({
-    adapters: [new EthersAdapter()],
-    metadata,
-    networks: [somniaTestnet],
-    projectId,
-    defaultNetwork: somniaTestnet as any,
-    features: {
-      analytics: false,
-      email: false, // Disable email wallet
-      socials: [], // Disable social logins
-    },
-    // CRITICAL: Enable only necessary wallet options
-    enableWalletConnect: true,
-    enableInjected: true,
-    enableEIP6963: true,
-    enableCoinbase: false, // Disable Coinbase since it might cause localhost issues
-  });
+// Create modal with proper config - only on client side
+if (typeof window !== "undefined") {
+  try {
+    createAppKit({
+      adapters: [new EthersAdapter()],
+      metadata,
+      networks: [somniaTestnet],
+      projectId,
+      defaultNetwork: somniaTestnet,
+      features: {
+        analytics: false,
+        email: false, // Disable email wallet
+        socials: [], // Disable social logins
+      },
+      // CRITICAL: Enable only necessary wallet options
+      enableWalletConnect: true,
+      enableInjected: true,
+      enableEIP6963: true,
+      enableCoinbase: false, // Disable Coinbase since it might cause localhost issues
+    });
 
-  console.log("[AppKit] AppKit initialized with Somnia Dream Testnet");
-} catch (error) {
-  console.warn("[AppKit] Initialization warning (can be ignored):", error);
+    console.log("[AppKit] AppKit initialized with Somnia Dream Testnet");
+  } catch (error) {
+    console.warn("[AppKit] Initialization warning (can be ignored):", error);
+  }
 }
 
 export function AppKit({ children }: { children: React.ReactNode }) {
