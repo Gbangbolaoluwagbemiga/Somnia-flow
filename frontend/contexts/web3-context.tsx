@@ -7,7 +7,12 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { BASE_MAINNET, BASE_TESTNET, CONTRACTS } from "@/lib/web3/config";
+import {
+  BASE_MAINNET,
+  BASE_TESTNET,
+  SOMNIA_TESTNET,
+  CONTRACTS,
+} from "@/lib/web3/config";
 import type { WalletState } from "@/lib/web3/types";
 import { useToast } from "@/hooks/use-toast";
 import { ethers } from "ethers";
@@ -94,7 +99,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           method: "eth_chainId",
         });
         const chainIdNumber = Number.parseInt(chainId, 16);
-        const targetChainId = Number.parseInt(BASE_MAINNET.chainId, 16);
+        const targetChainId = Number.parseInt(SOMNIA_TESTNET.chainId, 16);
 
         // If on wrong network, try to switch automatically (but only once per session)
         if (chainIdNumber !== targetChainId) {
@@ -178,46 +183,47 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
       const chainId = await window.ethereum.request({ method: "eth_chainId" });
       const chainIdNumber = Number.parseInt(chainId, 16);
-      const targetChainId = Number.parseInt(BASE_MAINNET.chainId, 16);
+      const targetChainId = Number.parseInt(SOMNIA_TESTNET.chainId, 16);
 
-      // Automatically switch to Base if not already on it
+      // Automatically switch to Somnia Testnet if not already on it
       if (chainIdNumber !== targetChainId) {
         toast({
-          title: "Switching to Base Mainnet",
+          title: "Switching to Somnia Dream Testnet",
           description: "Please approve the network switch or network addition",
         });
 
         try {
-          // First, try to switch to Base (this will automatically add it if missing)
-          await switchToBase();
+          // First, try to switch to Somnia Testnet (this will automatically add it if missing)
+          await switchToSomnia();
           // Wait for network switch to complete
           await new Promise((resolve) => setTimeout(resolve, 1500));
 
-          // Verify we're now on Base
+          // Verify we're now on Somnia Testnet
           const newChainId = await window.ethereum.request({
             method: "eth_chainId",
           });
           const newChainIdNumber = Number.parseInt(newChainId, 16);
 
           if (newChainIdNumber !== targetChainId) {
-            // If still not on Base, try to add it directly
+            // If still not on Somnia, try to add it directly
             try {
               await window.ethereum.request({
                 method: "wallet_addEthereumChain",
-                params: [BASE_MAINNET],
+                params: [SOMNIA_TESTNET],
               });
               toast({
-                title: "Base network added",
+                title: "Somnia network added",
                 description:
-                  "Base Mainnet has been added to your wallet. Please switch to it manually.",
+                  "Somnia Dream Testnet has been added to your wallet. Please switch to it manually.",
               });
             } catch (addError: any) {
-              console.error("Failed to add Base network:", addError);
+              console.error("Failed to add Somnia network:", addError);
             }
 
             toast({
               title: "Network switch required",
-              description: "Please switch to Base Mainnet to use this app",
+              description:
+                "Please switch to Somnia Dream Testnet to use this app",
               variant: "destructive",
             });
             return;
@@ -225,7 +231,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         } catch (switchError: any) {
           console.error("Failed to auto-switch network:", switchError);
 
-          // If switch failed, try to add Base network directly
+          // If switch failed, try to add Somnia network directly
           if (
             switchError.code === 4902 ||
             switchError.message?.includes("not been added")
@@ -233,20 +239,20 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             try {
               await window.ethereum.request({
                 method: "wallet_addEthereumChain",
-                params: [BASE_MAINNET],
+                params: [SOMNIA_TESTNET],
               });
               toast({
-                title: "Base network added",
+                title: "Somnia network added",
                 description:
-                  "Base Mainnet has been added. Please switch to it in your wallet.",
+                  "Somnia Dream Testnet has been added. Please switch to it in your wallet.",
               });
             } catch (addError: any) {
-              console.error("Failed to add Base network:", addError);
+              console.error("Failed to add Somnia network:", addError);
               toast({
                 title: "Network addition failed",
                 description:
                   addError.message ||
-                  "Failed to add Base Mainnet. Please add it manually.",
+                  "Failed to add Somnia Dream Testnet. Please add it manually.",
                 variant: "destructive",
               });
             }
@@ -374,6 +380,76 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     }
   };
 
+  const switchToSomnia = async () => {
+    if (typeof window === "undefined" || !window.ethereum) return;
+
+    if (isSwitchingNetwork) {
+      return;
+    }
+
+    const currentChainId = await window.ethereum.request({
+      method: "eth_chainId",
+    });
+    const currentChainIdNumber = Number.parseInt(currentChainId, 16);
+    const targetChainId = Number.parseInt(SOMNIA_TESTNET.chainId, 16);
+
+    if (currentChainIdNumber === targetChainId) {
+      toast({
+        title: "Already connected",
+        description: "You're already on Somnia Dream Testnet",
+      });
+      return;
+    }
+
+    setIsSwitchingNetwork(true);
+
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: SOMNIA_TESTNET.chainId }],
+      });
+
+      toast({
+        title: "Network switched",
+        description: "Successfully switched to Somnia Dream Testnet",
+      });
+    } catch (error: any) {
+      if (error.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [SOMNIA_TESTNET],
+          });
+
+          toast({
+            title: "Network added",
+            description: "Somnia Dream Testnet has been added to your wallet",
+          });
+        } catch (addError: any) {
+          toast({
+            title: "Network error",
+            description:
+              addError.message || "Failed to add Somnia Dream Testnet",
+            variant: "destructive",
+          });
+        }
+      } else if (error.code === 4001) {
+        toast({
+          title: "Request cancelled",
+          description: "You cancelled the network switch",
+        });
+      } else {
+        toast({
+          title: "Switch failed",
+          description: error.message || "Failed to switch network",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setIsSwitchingNetwork(false);
+    }
+  };
+
   const switchToBaseTestnet = async () => {
     if (typeof window === "undefined" || !window.ethereum) return;
 
@@ -476,8 +552,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             }
           }
 
-          // Fallback to direct RPC connection
-          const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
+          // Fallback to direct RPC connection (Somnia Testnet)
+          const provider = new ethers.JsonRpcProvider(
+            SOMNIA_TESTNET.rpcUrls[0]
+          );
           const contract = new ethers.Contract(targetAddress, abi, provider);
 
           // Call the contract method directly
@@ -504,19 +582,19 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
           if (currentChainIdLower !== targetChainIdLower) {
             throw new Error(
-              `Wrong network! Please switch to Base Mainnet (Chain ID: ${targetChainId}). Current: ${currentChainId}`
+              `Wrong network! Please switch to Somnia Dream Testnet (Chain ID: ${targetChainId}). Current: ${currentChainId}`
             );
           }
 
-          // Additional check: verify we can connect to Base RPC
+          // Additional check: verify we can connect to Somnia RPC
           try {
-            const baseProvider = new ethers.JsonRpcProvider(
-              BASE_MAINNET.rpcUrls[0]
+            const somniaProvider = new ethers.JsonRpcProvider(
+              SOMNIA_TESTNET.rpcUrls[0]
             );
-            await baseProvider.getBlockNumber(); // Test connection to Base
-          } catch (baseError) {
+            await somniaProvider.getBlockNumber(); // Test connection to Somnia
+          } catch (somniaError) {
             throw new Error(
-              `Network validation failed. Please ensure you're connected to Base Mainnet (Chain ID: 8453).`
+              `Network validation failed. Please ensure you're connected to Somnia Dream Testnet (Chain ID: 50312).`
             );
           }
 

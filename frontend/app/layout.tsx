@@ -35,6 +35,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Debug logging - see what's happening */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              console.log('[AppKit] Script loaded in head');
+            `,
+          }}
+        />
         <link
           rel="icon"
           href="/secureflow-favicon.svg?v=2"
