@@ -16,8 +16,9 @@ import { AppKit } from "@/lib/web3/reown-config";
 import { FarcasterSDKProvider } from "@/components/farcaster-sdk-provider";
 
 export const metadata: Metadata = {
-  title: "SecureFlow - Trustless Escrow on Base",
-  description: "Trustless payments with transparent milestones powered by Base",
+  title: "SecureFlow - Trustless Escrow on Somnia",
+  description:
+    "Trustless payments with transparent milestones powered by Somnia Data Streams",
   generator: "SecureFlow",
   manifest: "/manifest.json",
   icons: {

@@ -7,7 +7,7 @@ import { useSmartAccount } from "@/contexts/smart-account-context";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CONTRACTS, ZERO_ADDRESS, BASE_MAINNET } from "@/lib/web3/config";
+import { CONTRACTS, ZERO_ADDRESS, SOMNIA_TESTNET } from "@/lib/web3/config";
 import { SECUREFLOW_ABI, ERC20_ABI } from "@/lib/web3/abis";
 import { useRouter } from "next/navigation";
 import { ProjectDetailsStep } from "@/components/create/project-details-step";
@@ -21,7 +21,7 @@ interface Milestone {
 
 export default function CreateEscrowPage() {
   const router = useRouter();
-  const { wallet, getContract, switchToBase } = useWeb3();
+  const { wallet, getContract, switchToSomnia } = useWeb3();
   const { executeTransaction, isSmartAccountReady } = useSmartAccount();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
@@ -65,7 +65,7 @@ export default function CreateEscrowPage() {
       const currentChainId = await window.ethereum.request({
         method: "eth_chainId",
       });
-      const targetChainId = BASE_MAINNET.chainId; // Base Mainnet
+      const targetChainId = SOMNIA_TESTNET.chainId; // Somnia Dream Testnet
 
       setIsOnCorrectNetwork(
         currentChainId.toLowerCase() === targetChainId.toLowerCase()
@@ -121,7 +121,7 @@ export default function CreateEscrowPage() {
       let allWhitelistedTokens: string[] = [];
 
       try {
-        const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
+        const provider = new ethers.JsonRpcProvider(SOMNIA_TESTNET.rpcUrls[0]);
         const contractWithProvider = new ethers.Contract(
           CONTRACTS.SECUREFLOW_ESCROW,
           SECUREFLOW_ABI,
@@ -259,7 +259,7 @@ export default function CreateEscrowPage() {
       }
 
       // Fetch token metadata in parallel with timeout
-      const provider = new ethers.JsonRpcProvider(BASE_MAINNET.rpcUrls[0]);
+      const provider = new ethers.JsonRpcProvider(SOMNIA_TESTNET.rpcUrls[0]);
       const ERC20_ABI = [
         "function name() view returns (string)",
         "function symbol() view returns (string)",
@@ -567,7 +567,7 @@ export default function CreateEscrowPage() {
       if (!formData.beneficiary) {
         errors.push("Beneficiary address is required for direct escrow");
       } else if (!/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary)) {
-        errors.push("Beneficiary address must be a valid Base address");
+        errors.push("Beneficiary address must be a valid Somnia address");
       }
     }
 
@@ -705,7 +705,7 @@ export default function CreateEscrowPage() {
           throw new Error(
             `Token contract error: ${
               tokenError.message ||
-              "Please check the token address and ensure you're on Base Mainnet"
+              "Please check the token address and ensure you're on Somnia Dream Testnet"
             }`
           );
         }
@@ -787,7 +787,7 @@ export default function CreateEscrowPage() {
           if (balance === null) {
             try {
               const rpcProvider = new ethers.JsonRpcProvider(
-                BASE_MAINNET.rpcUrls[0]
+                SOMNIA_TESTNET.rpcUrls[0]
               );
               const tokenContractRPC = new ethers.Contract(
                 checksummedTokenAddress,
@@ -858,7 +858,7 @@ export default function CreateEscrowPage() {
           throw new Error(
             `Failed to check token balance: ${
               balanceError.message ||
-              "Please ensure you have enough tokens and are on Base Mainnet"
+              "Please ensure you have enough tokens and are on Somnia Dream Testnet"
             }`
           );
         }
@@ -989,7 +989,7 @@ export default function CreateEscrowPage() {
             const { ethers } = await import("ethers");
             const checksummedAddress = ethers.getAddress(wallet.address);
             const provider = new ethers.JsonRpcProvider(
-              BASE_MAINNET.rpcUrls[0]
+              SOMNIA_TESTNET.rpcUrls[0]
             );
             balanceInWei = await provider.getBalance(checksummedAddress);
             balanceSource = "directRPC";
@@ -1370,12 +1370,12 @@ export default function CreateEscrowPage() {
                     Wrong Network
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Please switch to Base Mainnet to create escrows
+                    Please switch to Somnia Dream Testnet to create escrows
                   </p>
                 </div>
               </div>
-              <Button onClick={switchToBase} variant="destructive" size="sm">
-                Switch to Base Mainnet
+              <Button onClick={switchToSomnia} variant="destructive" size="sm">
+                Switch to Somnia Dream Testnet
               </Button>
             </div>
           </div>

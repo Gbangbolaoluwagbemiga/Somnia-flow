@@ -7,12 +7,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import {
-  BASE_MAINNET,
-  BASE_TESTNET,
-  SOMNIA_TESTNET,
-  CONTRACTS,
-} from "@/lib/web3/config";
+import { SOMNIA_TESTNET, CONTRACTS } from "@/lib/web3/config";
 import type { WalletState } from "@/lib/web3/types";
 import { useToast } from "@/hooks/use-toast";
 import { ethers } from "ethers";
@@ -21,8 +16,7 @@ interface Web3ContextType {
   wallet: WalletState;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
-  switchToBase: () => Promise<void>;
-  switchToBaseTestnet: () => Promise<void>;
+  switchToSomnia: () => Promise<void>;
   getContract: (address: string, abi: any) => any;
   isOwner: boolean;
 }
@@ -259,7 +253,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           } else {
             toast({
               title: "Network switch required",
-              description: "Please switch to Base Mainnet manually to continue",
+              description:
+                "Please switch to Somnia Dream Testnet manually to continue",
               variant: "destructive",
             });
           }
@@ -283,7 +278,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
       toast({
         title: "Wallet connected",
-        description: `Connected to Base Mainnet - ${accounts[0].slice(
+        description: `Connected to Somnia Dream Testnet - ${accounts[0].slice(
           0,
           6
         )}...${accounts[0].slice(-4)}`,
@@ -309,75 +304,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       title: "Wallet disconnected",
       description: "Your wallet has been disconnected",
     });
-  };
-
-  const switchToBase = async () => {
-    if (typeof window === "undefined" || !window.ethereum) return;
-
-    if (isSwitchingNetwork) {
-      return;
-    }
-
-    const currentChainId = await window.ethereum.request({
-      method: "eth_chainId",
-    });
-    const currentChainIdNumber = Number.parseInt(currentChainId, 16);
-    const targetChainId = Number.parseInt(BASE_MAINNET.chainId, 16);
-
-    if (currentChainIdNumber === targetChainId) {
-      toast({
-        title: "Already connected",
-        description: "You're already on Base mainnet",
-      });
-      return;
-    }
-
-    setIsSwitchingNetwork(true);
-
-    try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: BASE_MAINNET.chainId }],
-      });
-
-      toast({
-        title: "Network switched",
-        description: "Successfully switched to Base mainnet",
-      });
-    } catch (error: any) {
-      if (error.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [BASE_MAINNET],
-          });
-
-          toast({
-            title: "Network added",
-            description: "Base mainnet has been added to your wallet",
-          });
-        } catch (addError: any) {
-          toast({
-            title: "Network error",
-            description: addError.message || "Failed to add Base mainnet",
-            variant: "destructive",
-          });
-        }
-      } else if (error.code === 4001) {
-        toast({
-          title: "Request cancelled",
-          description: "You cancelled the network switch",
-        });
-      } else {
-        toast({
-          title: "Switch failed",
-          description: error.message || "Failed to switch network",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setIsSwitchingNetwork(false);
-    }
   };
 
   const switchToSomnia = async () => {
@@ -430,76 +356,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             title: "Network error",
             description:
               addError.message || "Failed to add Somnia Dream Testnet",
-            variant: "destructive",
-          });
-        }
-      } else if (error.code === 4001) {
-        toast({
-          title: "Request cancelled",
-          description: "You cancelled the network switch",
-        });
-      } else {
-        toast({
-          title: "Switch failed",
-          description: error.message || "Failed to switch network",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setIsSwitchingNetwork(false);
-    }
-  };
-
-  const switchToBaseTestnet = async () => {
-    if (typeof window === "undefined" || !window.ethereum) return;
-
-    if (isSwitchingNetwork) {
-      return;
-    }
-
-    const currentChainId = await window.ethereum.request({
-      method: "eth_chainId",
-    });
-    const currentChainIdNumber = Number.parseInt(currentChainId, 16);
-    const targetChainId = Number.parseInt(BASE_TESTNET.chainId, 16);
-
-    if (currentChainIdNumber === targetChainId) {
-      toast({
-        title: "Already connected",
-        description: "You're already on Base Sepolia testnet",
-      });
-      return;
-    }
-
-    setIsSwitchingNetwork(true);
-
-    try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: BASE_TESTNET.chainId }],
-      });
-
-      toast({
-        title: "Network switched",
-        description: "Successfully switched to Base Sepolia testnet",
-      });
-    } catch (error: any) {
-      if (error.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [BASE_TESTNET],
-          });
-
-          toast({
-            title: "Network added",
-            description: "Base Sepolia testnet has been added to your wallet",
-          });
-        } catch (addError: any) {
-          toast({
-            title: "Network error",
-            description:
-              addError.message || "Failed to add Base Sepolia testnet",
             variant: "destructive",
           });
         }
@@ -573,8 +429,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
             method: "eth_chainId",
           });
 
-          // Check if we're on Base Mainnet
-          const targetChainId = BASE_MAINNET.chainId;
+          // Check if we're on Somnia Dream Testnet
+          const targetChainId = SOMNIA_TESTNET.chainId;
 
           // Convert to lowercase for case-insensitive comparison
           const currentChainIdLower = currentChainId.toLowerCase();
@@ -719,8 +575,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         wallet,
         connectWallet,
         disconnectWallet,
-        switchToBase,
-        switchToBaseTestnet,
+        switchToSomnia,
         getContract,
         isOwner,
       }}

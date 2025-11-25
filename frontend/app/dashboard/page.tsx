@@ -144,14 +144,14 @@ export default function DashboardPage() {
   ): Promise<{ freelancerAmount: number; clientAmount: number } | null> => {
     try {
       const { ethers } = await import("ethers");
-      const { CONTRACTS, BASE_MAINNET } = await import("@/lib/web3/config");
+      const { CONTRACTS, SOMNIA_TESTNET } = await import("@/lib/web3/config");
       const { SECUREFLOW_ABI } = await import("@/lib/web3/abis");
 
       // Try to get provider from wallet context or use RPC
       let provider: any = null;
       let lastError: any = null;
 
-      for (const rpcUrl of BASE_MAINNET.rpcUrls) {
+      for (const rpcUrl of SOMNIA_TESTNET.rpcUrls) {
         try {
           provider = new ethers.JsonRpcProvider(rpcUrl);
           // Test connection

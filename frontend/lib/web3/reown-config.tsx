@@ -1,9 +1,7 @@
 "use client";
 
-import React, { useEffect } from "react";
 import { createAppKit } from "@reown/appkit/react";
 import { EthersAdapter } from "@reown/appkit-adapter-ethers";
-import { ethers } from "ethers";
 
 // Get projectId from environment
 const projectId =
@@ -12,7 +10,7 @@ const projectId =
 // Create metadata
 const metadata = {
   name: "SecureFlow",
-  description: "Secure Escrow Platform for Freelancers",
+  description: "Secure Escrow Platform powered by Somnia Data Streams",
   url:
     typeof window !== "undefined"
       ? window.location.origin
@@ -20,83 +18,36 @@ const metadata = {
   icons: ["/secureflow-logo.svg"],
 };
 
-// Define networks - Somnia Testnet is first (primary network for hackathon)
-const networks = [
-  {
-    id: 50312,
-    name: "Somnia Dream Testnet",
-    currency: "STT",
-    explorerUrl: "https://dream.somnia.network",
-    rpcUrl: "https://dream-rpc.somnia.network",
-    iconUrl: "https://dream.somnia.network/favicon.ico", // Network icon
-  },
-  {
-    id: 8453,
-    name: "Base",
-    currency: "ETH",
-    explorerUrl: "https://basescan.org",
-    rpcUrl: "https://mainnet.base.org",
-  },
-  {
-    id: 84532,
-    name: "Base Sepolia Testnet",
-    currency: "ETH",
-    explorerUrl: "https://sepolia.basescan.org",
-    rpcUrl: "https://sepolia.base.org",
-  },
-];
+// Somnia Dream Testnet configuration - AppKit simplified format
+const somniaTestnet = {
+  id: 50312,
+  name: "Somnia Dream Testnet",
+  currency: "STT",
+  explorerUrl: "https://dream.somnia.network",
+  rpcUrl: "https://dream-rpc.somnia.network",
+} as const;
 
 // Log initialization
 if (typeof window !== "undefined") {
-  console.log("[AppKit Config] Initializing AppKit with networks:", networks);
+  console.log("[AppKit] Initializing AppKit with Somnia Dream Testnet only");
 }
 
-// Create the AppKit instance
-// Configure to work even if remote APIs fail
+// Create the AppKit instance - ONLY Somnia Testnet
+// Note: localhost:8545 errors are expected when no wallet is connected
+// They will stop once you connect your wallet
 createAppKit({
   adapters: [new EthersAdapter()],
   metadata,
-  networks,
+  networks: [somniaTestnet as any], // Only Somnia - using 'as any' to bypass strict type checking
   projectId,
-  defaultChain: networks[0], // Set Somnia Testnet as default
   features: {
-    analytics: false, // Disable analytics to reduce API calls
+    analytics: false,
   },
   enableEIP6963: true,
   enableCoinbase: true,
-  // Disable remote config fetching - use local defaults
-  enableAccountView: true,
-  enableNetworkView: true,
 });
 
-console.log("[AppKit Config] AppKit initialized");
-
-// Log any errors that occur after initialization
-if (typeof window !== "undefined") {
-  window.addEventListener("error", (event) => {
-    if (event.message?.includes("localhost:8545")) {
-      console.warn(
-        "[AppKit] Ignoring localhost:8545 error (expected when no wallet connected):",
-        event.message
-      );
-      event.preventDefault(); // Prevent error from showing in console
-    }
-  });
-
-  // Also catch unhandled promise rejections
-  window.addEventListener("unhandledrejection", (event) => {
-    const reason = String(event.reason || "");
-    if (
-      reason.includes("localhost:8545") ||
-      reason.includes("Connection refused")
-    ) {
-      console.warn(
-        "[AppKit] Ignoring localhost:8545 promise rejection (expected when no wallet connected)"
-      );
-      event.preventDefault(); // Prevent error from showing in console
-    }
-  });
-}
+console.log("[AppKit] AppKit initialized with Somnia Dream Testnet");
 
 export function AppKit({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
