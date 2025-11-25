@@ -1,7 +1,7 @@
 // Somnia Dream Testnet - Primary network for hackathon
 export const SOMNIA_TESTNET = {
-  chainId: "0xC4A8", // 50312 in hex (Somnia Dream Testnet)
-  chainName: "Somnia Dream",
+  chainId: "0xc488", // 50312 in hex (lowercase for wallet methods)
+  chainName: "Somnia Dream Testnet",
   nativeCurrency: {
     name: "STT",
     symbol: "STT",

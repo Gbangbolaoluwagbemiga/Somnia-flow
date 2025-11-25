@@ -18,14 +18,14 @@ const metadata = {
   icons: ["/secureflow-logo.svg"],
 };
 
-// Somnia Dream Testnet configuration - AppKit simplified format
+// ✅ CORRECT: Ethers v6 Network format for AppKit
 const somniaTestnet = {
   id: 50312,
   name: "Somnia Dream Testnet",
   currency: "STT",
   explorerUrl: "https://dream.somnia.network",
   rpcUrl: "https://dream-rpc.somnia.network",
-} as const;
+} as any; // AppKit accepts simplified format
 
 // Log initialization
 if (typeof window !== "undefined") {
@@ -33,12 +33,10 @@ if (typeof window !== "undefined") {
 }
 
 // Create the AppKit instance - ONLY Somnia Testnet
-// Note: localhost:8545 errors are expected when no wallet is connected
-// They will stop once you connect your wallet
 createAppKit({
   adapters: [new EthersAdapter()],
   metadata,
-  networks: [somniaTestnet as any], // Only Somnia - using 'as any' to bypass strict type checking
+  networks: [somniaTestnet], // Only Somnia
   projectId,
   features: {
     analytics: false,

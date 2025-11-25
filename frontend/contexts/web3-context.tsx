@@ -409,8 +409,13 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           }
 
           // Fallback to direct RPC connection (Somnia Testnet)
+          // ✅ Use JsonRpcProvider with explicit network config to prevent auto-detection
           const provider = new ethers.JsonRpcProvider(
-            SOMNIA_TESTNET.rpcUrls[0]
+            SOMNIA_TESTNET.rpcUrls[0],
+            {
+              chainId: 50312,
+              name: "somnia-testnet",
+            }
           );
           const contract = new ethers.Contract(targetAddress, abi, provider);
 
@@ -445,7 +450,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           // Additional check: verify we can connect to Somnia RPC
           try {
             const somniaProvider = new ethers.JsonRpcProvider(
-              SOMNIA_TESTNET.rpcUrls[0]
+              SOMNIA_TESTNET.rpcUrls[0],
+              {
+                chainId: 50312,
+                name: "somnia-testnet",
+              }
             );
             await somniaProvider.getBlockNumber(); // Test connection to Somnia
           } catch (somniaError) {
