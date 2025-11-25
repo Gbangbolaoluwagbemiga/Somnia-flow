@@ -57,7 +57,7 @@ SecureFlow is a comprehensive decentralized platform combining escrow services w
 ├── scripts/
 │   ├── deploy.js               # Contract deployment
 │   ├── deploy-paymaster.js     # Paymaster deployment
-│   └── register-somnia-schemas.js # Register SDS schemas
+│   └── register-somnia-schemas.ts # Register SDS schemas
 └── test/
     └── SecureFlow.test.js      # Test suite
 ```
@@ -102,7 +102,7 @@ EOF
 
 ```bash
 # Register all SecureFlow schemas on Somnia Testnet
-node scripts/register-somnia-schemas.js
+npx ts-node scripts/register-somnia-schemas.ts
 ```
 
 **Status**: All 5 schemas have been registered successfully!
@@ -365,7 +365,7 @@ frontend/
 Before using the app, register all schemas on Somnia Testnet:
 
 ```bash
-node scripts/register-somnia-schemas.js
+npx ts-node scripts/register-somnia-schemas.ts
 ```
 
 This registers all 5 schemas on-chain, making them discoverable and enabling automatic decoding.
