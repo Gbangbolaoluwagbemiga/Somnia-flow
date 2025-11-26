@@ -873,56 +873,134 @@ export default function CreateEscrowPage() {
         }
 
         try {
-          const approvalTx = await tokenContract.send(
-            "approve",
-            "no-value", // No native value for ERC20 approval
-            CONTRACTS.SECUREFLOW_ESCROW,
-            totalAmountInWei
-          );
+          // Check if there's already sufficient approval
+          let needsApproval = true;
+          try {
+            const currentAllowance = await tokenContract.call(
+              "allowance",
+              wallet.address,
+              CONTRACTS.SECUREFLOW_ESCROW
+            );
+            const currentAllowanceBigInt = BigInt(currentAllowance || "0");
+            const totalAmountBigInt = BigInt(totalAmountInWei);
 
-          toast({
-            title: "Approval submitted",
-            description: "Waiting for token approval confirmation...",
-          });
+            if (currentAllowanceBigInt >= totalAmountBigInt) {
+              needsApproval = false;
+              console.log(
+                "Sufficient approval already exists:",
+                currentAllowanceBigInt.toString(),
+                ">=",
+                totalAmountBigInt.toString()
+              );
+            }
+          } catch (allowanceError) {
+            console.warn("Could not check existing allowance:", allowanceError);
+            // Continue with approval if check fails
+          }
 
-          // Wait for approval transaction to be mined
-          let approvalReceipt;
-          let approvalAttempts = 0;
-          const maxApprovalAttempts = 30;
+          if (needsApproval) {
+            console.log(
+              "Requesting token approval for amount:",
+              totalAmountInWei
+            );
+            const approvalTx = await tokenContract.send(
+              "approve",
+              "no-value", // No native value for ERC20 approval
+              CONTRACTS.SECUREFLOW_ESCROW,
+              totalAmountInWei
+            );
 
-          while (approvalAttempts < maxApprovalAttempts) {
-            try {
-              approvalReceipt = await window.ethereum.request({
-                method: "eth_getTransactionReceipt",
-                params: [approvalTx],
+            toast({
+              title: "Approval submitted",
+              description: "Waiting for token approval confirmation...",
+            });
+
+            // Wait for approval transaction to be mined
+            let approvalReceipt;
+            let approvalAttempts = 0;
+            const maxApprovalAttempts = 30;
+
+            while (approvalAttempts < maxApprovalAttempts) {
+              try {
+                approvalReceipt = await window.ethereum.request({
+                  method: "eth_getTransactionReceipt",
+                  params: [approvalTx],
+                });
+
+                if (approvalReceipt) {
+                  break;
+                }
+              } catch (error) {
+                console.warn("Error checking receipt:", error);
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              approvalAttempts++;
+            }
+
+            if (!approvalReceipt) {
+              throw new Error(
+                `Transaction timeout. Please check the transaction on the blockchain explorer: ${approvalTx}`
+              );
+            }
+
+            if (approvalReceipt.status !== "0x1") {
+              // Transaction failed - try to get more details
+              let errorMessage =
+                "Token approval transaction failed or was rejected";
+
+              // Check if transaction reverted
+              if (approvalReceipt.status === "0x0") {
+                errorMessage =
+                  "Token approval transaction reverted. This could be due to insufficient gas, contract error, or token restrictions.";
+              }
+
+              // Log transaction details for debugging
+              console.error("Approval transaction failed:", {
+                txHash: approvalTx,
+                receipt: approvalReceipt,
+                gasUsed: approvalReceipt.gasUsed,
+                status: approvalReceipt.status,
               });
 
-              if (approvalReceipt) {
-                break;
-              }
-            } catch (error) {}
+              throw new Error(errorMessage);
+            }
 
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            approvalAttempts++;
+            toast({
+              title: "Token approved",
+              description: "Token approval confirmed. Creating escrow...",
+            });
+          } else {
+            toast({
+              title: "Approval confirmed",
+              description:
+                "Sufficient approval already exists. Creating escrow...",
+            });
           }
-
-          if (!approvalReceipt || approvalReceipt.status !== "0x1") {
-            throw new Error(
-              "Token approval transaction failed or was rejected"
-            );
-          }
-
-          toast({
-            title: "Token approved",
-            description: "Token approval confirmed. Creating escrow...",
-          });
         } catch (approvalError: any) {
           console.error("Approval error:", approvalError);
-          throw new Error(
-            `Token approval failed: ${
-              approvalError.message || "Please try again"
-            }`
-          );
+
+          // Provide more helpful error messages
+          let errorMessage = approvalError.message || "Please try again";
+
+          if (
+            approvalError.message?.includes("user rejected") ||
+            approvalError.message?.includes("User denied")
+          ) {
+            errorMessage =
+              "Approval was cancelled. Please approve the transaction to continue.";
+          } else if (approvalError.message?.includes("insufficient funds")) {
+            errorMessage =
+              "Insufficient funds for gas. Please ensure you have enough native tokens (STT) for gas fees.";
+          } else if (
+            approvalError.message?.includes("revert") ||
+            approvalError.message?.includes("execution reverted")
+          ) {
+            errorMessage =
+              "Transaction reverted. The token contract may have restrictions or the approval amount is invalid.";
+          }
+
+          throw new Error(`Token approval failed: ${errorMessage}`);
         }
       }
 

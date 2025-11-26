@@ -468,43 +468,41 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           // Estimate gas for the transaction with optimized limits
           let gasLimit = "0x80000"; // Reduced default fallback (524,288 gas)
 
-          // Force higher gas limits for specific functions that need it
-          if (method === "approve") {
-            gasLimit = "0xc350"; // 50,000 gas - force higher limit for ERC20 approve
-          } else {
-            try {
-              const estimatedGas = await window.ethereum.request({
-                method: "eth_estimateGas",
-                params: [
-                  {
-                    from: wallet.address,
-                    to: targetAddress,
-                    data,
-                    value:
-                      value !== "0x0" && value !== "no-value" ? value : "0x0",
-                  },
-                ],
-              });
-              // Add only 10% buffer to estimated gas (reduced from 20%)
-              const gasWithBuffer = Math.floor(Number(estimatedGas) * 1.1);
-              gasLimit = `0x${gasWithBuffer.toString(16)}`;
-            } catch (gasError) {
-              // Use much lower, function-specific gas limits
-              if (method === "unpause" || method === "pause") {
-                gasLimit = "0x20000"; // 131,072 gas - very low for simple functions
-              } else if (
-                method === "submitMilestone" ||
-                method === "approveMilestone" ||
-                method === "rejectMilestone" ||
-                method === "disputeMilestone"
-              ) {
-                gasLimit = "0x30000"; // 196,608 gas - reduced for milestone functions
-              } else if (
-                method === "createEscrow" ||
-                method === "createEscrowNative"
-              ) {
-                gasLimit = "0x60000"; // 393,216 gas - optimized for escrow creation
-              }
+          // Try to estimate gas for all functions, including approve
+          try {
+            const estimatedGas = await window.ethereum.request({
+              method: "eth_estimateGas",
+              params: [
+                {
+                  from: wallet.address,
+                  to: targetAddress,
+                  data,
+                  value:
+                    value !== "0x0" && value !== "no-value" ? value : "0x0",
+                },
+              ],
+            });
+            // Add 20% buffer to estimated gas for safety
+            const gasWithBuffer = Math.floor(Number(estimatedGas) * 1.2);
+            gasLimit = `0x${gasWithBuffer.toString(16)}`;
+          } catch (gasError) {
+            // If gas estimation fails, use function-specific fallback limits
+            if (method === "approve") {
+              gasLimit = "0x186a0"; // 100,000 gas - increased from 50k for ERC20 approve
+            } else if (method === "unpause" || method === "pause") {
+              gasLimit = "0x20000"; // 131,072 gas - very low for simple functions
+            } else if (
+              method === "submitMilestone" ||
+              method === "approveMilestone" ||
+              method === "rejectMilestone" ||
+              method === "disputeMilestone"
+            ) {
+              gasLimit = "0x30000"; // 196,608 gas - reduced for milestone functions
+            } else if (
+              method === "createEscrow" ||
+              method === "createEscrowNative"
+            ) {
+              gasLimit = "0x60000"; // 393,216 gas - optimized for escrow creation
             }
           }
 
