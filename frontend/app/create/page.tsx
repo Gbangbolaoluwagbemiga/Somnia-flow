@@ -1,5 +1,8 @@
 "use client";
 
+// Force dynamic rendering to prevent SSR issues with AppKit
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
@@ -218,9 +221,11 @@ export default function CreateEscrowPage() {
       // Also check USDC directly as fallback
       const tokensToVerify = [
         ...allWhitelistedTokens, // Verify all tokens from events
-        CONTRACTS.USDC_MAINNET,
         CONTRACTS.USDC,
-      ].filter((t) => t && t !== "0x0000000000000000000000000000000000000000");
+      ].filter(
+        (t: string | undefined) =>
+          t && t !== "0x0000000000000000000000000000000000000000"
+      );
 
       // Remove duplicates
       const uniqueTokensToVerify = [
@@ -655,9 +660,10 @@ export default function CreateEscrowPage() {
 
         // Test if token contract is working and get decimals
         let tokenDecimals = 18; // Default to 18
+        let tokenSymbol = "TOKEN"; // Default symbol for error messages
         try {
           const tokenName = await tokenContract.call("name");
-          const tokenSymbol = await tokenContract.call("symbol");
+          tokenSymbol = (await tokenContract.call("symbol")) || "TOKEN";
           const decimals = await tokenContract.call("decimals");
           tokenDecimals = Number(decimals) || 18;
 
@@ -720,6 +726,9 @@ export default function CreateEscrowPage() {
         // Check token balance first
         try {
           // Ensure wallet address is checksummed
+          if (!wallet.address) {
+            throw new Error("Wallet address is not available");
+          }
           const { ethers } = await import("ethers");
           const checksummedAddress = ethers.getAddress(wallet.address);
           const checksummedTokenAddress = ethers.getAddress(formData.token);
@@ -933,8 +942,8 @@ export default function CreateEscrowPage() {
 
       // Native tokens (ZERO_ADDRESS) are always whitelisted by default in the contract
       if (isNativeToken) {
-        // Use createEscrowNative for native CELO tokens
-        console.log("Creating native CELO escrow (no whitelist check needed)");
+        // Use createEscrowNative for native tokens
+        console.log("Creating native token escrow (no whitelist check needed)");
         const totalAmountInWei = BigInt(
           Math.floor(Number.parseFloat(formData.totalBudget) * 10 ** 18)
         ).toString();
@@ -944,7 +953,11 @@ export default function CreateEscrowPage() {
         let balanceSource = "unknown";
 
         // Method 1: Try wallet provider (most reliable)
-        if (typeof window !== "undefined" && window.ethereum) {
+        if (
+          typeof window !== "undefined" &&
+          window.ethereum &&
+          wallet.address
+        ) {
           try {
             const { ethers } = await import("ethers");
             const checksummedAddress = ethers.getAddress(wallet.address);
@@ -952,7 +965,7 @@ export default function CreateEscrowPage() {
             balanceInWei = await walletProvider.getBalance(checksummedAddress);
             balanceSource = "walletProvider";
             console.log(
-              "✅ CELO balance from wallet provider:",
+              `✅ ${SOMNIA_TESTNET.nativeCurrency.symbol} balance from wallet provider:`,
               balanceInWei.toString()
             );
           } catch (walletError: any) {
@@ -964,7 +977,7 @@ export default function CreateEscrowPage() {
         }
 
         // Method 2: Try direct RPC call
-        if (!balanceInWei) {
+        if (!balanceInWei && wallet.address) {
           try {
             const { ethers } = await import("ethers");
             const checksummedAddress = ethers.getAddress(wallet.address);
@@ -975,7 +988,7 @@ export default function CreateEscrowPage() {
             balanceInWei = BigInt(balance);
             balanceSource = "eth_getBalance";
             console.log(
-              "✅ CELO balance from eth_getBalance:",
+              `✅ ${SOMNIA_TESTNET.nativeCurrency.symbol} balance from eth_getBalance:`,
               balanceInWei.toString()
             );
           } catch (rpcError: any) {
@@ -984,7 +997,7 @@ export default function CreateEscrowPage() {
         }
 
         // Method 3: Try direct RPC provider
-        if (!balanceInWei) {
+        if (!balanceInWei && wallet.address) {
           try {
             const { ethers } = await import("ethers");
             const checksummedAddress = ethers.getAddress(wallet.address);
@@ -994,7 +1007,7 @@ export default function CreateEscrowPage() {
             balanceInWei = await provider.getBalance(checksummedAddress);
             balanceSource = "directRPC";
             console.log(
-              "✅ CELO balance from direct RPC:",
+              `✅ ${SOMNIA_TESTNET.nativeCurrency.symbol} balance from direct RPC:`,
               balanceInWei.toString()
             );
           } catch (directRpcError: any) {
@@ -1007,15 +1020,16 @@ export default function CreateEscrowPage() {
 
         if (!balanceInWei) {
           throw new Error(
-            "Failed to retrieve CELO balance from all methods. Please check your wallet connection and network."
+            `Failed to retrieve ${SOMNIA_TESTNET.nativeCurrency.symbol} balance from all methods. Please check your wallet connection and network.`
           );
         }
 
         const requiredAmount = BigInt(totalAmountInWei);
         const balanceFormatted = Number(balanceInWei) / 10 ** 18;
         const requiredFormatted = Number(requiredAmount) / 10 ** 18;
+        const nativeSymbol = SOMNIA_TESTNET.nativeCurrency.symbol;
 
-        console.log("CELO Balance check:", {
+        console.log(`${nativeSymbol} Balance check:`, {
           balanceSource,
           rawBalance: balanceInWei.toString(),
           balanceFormatted: balanceFormatted.toFixed(4),
@@ -1025,9 +1039,11 @@ export default function CreateEscrowPage() {
 
         if (balanceInWei < requiredAmount) {
           throw new Error(
-            `Insufficient CELO balance. You have ${balanceFormatted.toFixed(
+            `Insufficient ${nativeSymbol} balance. You have ${balanceFormatted.toFixed(
               4
-            )} CELO but need ${requiredFormatted.toFixed(4)} CELO.`
+            )} ${nativeSymbol} but need ${requiredFormatted.toFixed(
+              4
+            )} ${nativeSymbol}.`
           );
         }
 
@@ -1100,7 +1116,7 @@ export default function CreateEscrowPage() {
               txHash = await executeTransaction(
                 CONTRACTS.SECUREFLOW_ESCROW,
                 data,
-                (Number(totalAmountInWei) / 1e18).toString() // Convert wei to CELO for value
+                (Number(totalAmountInWei) / 1e18).toString() // Convert wei to native token for value
               );
 
               toast({
@@ -1177,7 +1193,7 @@ export default function CreateEscrowPage() {
           txHash = await executeTransaction(
             CONTRACTS.SECUREFLOW_ESCROW,
             data,
-            "0" // No CELO value for ERC20
+            "0" // No native token value for ERC20
           );
 
           toast({
@@ -1455,11 +1471,13 @@ export default function CreateEscrowPage() {
                           ZERO_ADDRESS.toLowerCase())
                     ) {
                       // If unchecking native token and token is currently ZERO_ADDRESS, set to default
-                      console.log("Unchecking native token, setting to USDC");
+                      console.log(
+                        "Unchecking native token, setting to default token"
+                      );
                       setFormData({
                         ...formData,
                         ...data,
-                        token: CONTRACTS.USDC_MAINNET || CONTRACTS.USDC,
+                        token: CONTRACTS.USDC || CONTRACTS.MOCK_ERC20,
                       });
                     } else {
                       console.log(

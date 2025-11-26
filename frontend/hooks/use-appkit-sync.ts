@@ -5,6 +5,8 @@ import { useAppKit } from "@reown/appkit/react";
 import { useWeb3 } from "@/contexts/web3-context";
 
 export function useAppKitSync() {
+  // useAppKit must be called unconditionally (React rules)
+  // It will work once AppKit is initialized on client side
   const { open, address, isConnected, chainId } = useAppKit();
   const { wallet } = useWeb3();
   const prevConnectedRef = useRef(false);

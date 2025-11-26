@@ -8,6 +8,8 @@ import { SOMNIA_TESTNET } from "@/lib/web3/config";
 
 export function WalletButton() {
   const { wallet } = useWeb3();
+  // useAppKit must be called unconditionally (React rules)
+  // It will work once AppKit is initialized on client side
   const { open } = useAppKit();
   const [networkIconError, setNetworkIconError] = useState(false);
   const [walletIconError, setWalletIconError] = useState(false);

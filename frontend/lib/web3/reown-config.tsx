@@ -78,8 +78,16 @@ const somniaTestnet = {
 
 console.log("[AppKit] Initializing AppKit with Somnia Dream Testnet only");
 
-// Create modal with proper config - only on client side
-if (typeof window !== "undefined") {
+// Singleton pattern to ensure createAppKit is only called once
+let appKitInitialized = false;
+
+// Create modal with proper config - must be called synchronously at module load
+// Use a function to ensure it's called even if it fails during SSR
+function initializeAppKit() {
+  if (appKitInitialized) {
+    return;
+  }
+
   try {
     createAppKit({
       adapters: [new EthersAdapter()],
@@ -99,9 +107,38 @@ if (typeof window !== "undefined") {
       enableCoinbase: false, // Disable Coinbase since it might cause localhost issues
     });
 
-    console.log("[AppKit] AppKit initialized with Somnia Dream Testnet");
+    appKitInitialized = true;
+    if (typeof window !== "undefined") {
+      console.log("[AppKit] AppKit initialized with Somnia Dream Testnet");
+    }
   } catch (error) {
-    console.warn("[AppKit] Initialization warning (can be ignored):", error);
+    // During SSR/build, this might fail - that's OK, we'll retry on client
+    // Only log warnings on client side to avoid build errors
+    if (typeof window !== "undefined") {
+      console.warn("[AppKit] Initialization warning (can be ignored):", error);
+    }
+    // Don't set appKitInitialized to true if it failed, so we can retry
+  }
+}
+
+// Initialize immediately
+initializeAppKit();
+
+// Also ensure initialization on client side if it failed during SSR
+if (typeof window !== "undefined") {
+  // Use a small delay to ensure window is fully available
+  if (typeof window.requestIdleCallback !== "undefined") {
+    window.requestIdleCallback(() => {
+      if (!appKitInitialized) {
+        initializeAppKit();
+      }
+    });
+  } else {
+    setTimeout(() => {
+      if (!appKitInitialized) {
+        initializeAppKit();
+      }
+    }, 0);
   }
 }
 

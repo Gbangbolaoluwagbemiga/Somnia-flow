@@ -1,5 +1,8 @@
 "use client";
 
+// Force dynamic rendering to prevent SSR issues with AppKit
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
