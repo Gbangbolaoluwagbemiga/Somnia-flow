@@ -277,16 +277,19 @@ export function MilestoneActions({
                 "Milestone submitted with no gas fees using Smart Account delegation",
             });
 
-            // Add cross-wallet notification - notify both CLIENT and FREELANCER
-            addCrossWalletNotification(
-              createMilestoneNotification(
-                "submitted",
-                escrowId,
-                milestoneIndex
-              ),
-              payerAddress, // Client address
-              beneficiaryAddress // Freelancer address
-            );
+            // Add notification for milestone submission - notify ONLY the CLIENT
+            // Skip current user (freelancer) - they shouldn't see this notification
+            if (payerAddress) {
+              addNotification(
+                createMilestoneNotification(
+                  "submitted",
+                  escrowId,
+                  milestoneIndex
+                ),
+                [payerAddress], // Notify ONLY the client
+                true // Skip current user - freelancer shouldn't see this
+              );
+            }
           } else {
             txHash = await contract.send(
               "submitMilestone",
@@ -300,16 +303,19 @@ export function MilestoneActions({
               description: "Waiting for client approval",
             });
 
-            // Add cross-wallet notification - notify both CLIENT and FREELANCER
-            addCrossWalletNotification(
-              createMilestoneNotification(
-                "submitted",
-                escrowId,
-                milestoneIndex
-              ),
-              payerAddress, // Client address
-              beneficiaryAddress // Freelancer address
-            );
+            // Add notification for milestone submission - notify ONLY the CLIENT
+            // Skip current user (freelancer) - they shouldn't see this notification
+            if (payerAddress) {
+              addNotification(
+                createMilestoneNotification(
+                  "submitted",
+                  escrowId,
+                  milestoneIndex
+                ),
+                [payerAddress], // Notify ONLY the client
+                true // Skip current user - freelancer shouldn't see this
+              );
+            }
           }
 
           // Wait for blockchain state to update, then refresh data
@@ -738,16 +744,19 @@ export function MilestoneActions({
                     "The milestone has been resubmitted and is waiting for client review",
                 });
 
-                // Add cross-wallet notification - notify both CLIENT and FREELANCER
-                addCrossWalletNotification(
-                  createMilestoneNotification(
-                    "submitted",
-                    escrowId,
-                    milestoneIndex
-                  ),
-                  payerAddress, // Client address
-                  beneficiaryAddress // Freelancer address
-                );
+                // Add notification for milestone resubmission - notify ONLY the CLIENT
+                // Skip current user (freelancer) - they shouldn't see this notification
+                if (payerAddress) {
+                  addNotification(
+                    createMilestoneNotification(
+                      "submitted",
+                      escrowId,
+                      milestoneIndex
+                    ),
+                    [payerAddress], // Notify ONLY the client
+                    true // Skip current user - freelancer shouldn't see this
+                  );
+                }
 
                 setDialogOpen(false);
                 onSuccess();

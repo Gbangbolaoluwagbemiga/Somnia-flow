@@ -914,16 +914,19 @@ export default function FreelancerPage() {
         const escrow = escrows.find((e) => e.id === escrowId);
         const clientAddress = escrow?.payer;
 
-        // Add cross-wallet notification for milestone submission
-        addCrossWalletNotification(
-          createMilestoneNotification("submitted", escrowId, milestoneIndex, {
-            freelancerName:
-              wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-            projectTitle: escrow?.projectTitle || `Project #${escrowId}`,
-          }),
-          clientAddress, // Client address
-          wallet.address || undefined // Freelancer address
-        );
+        // Add notification for milestone submission - notify ONLY the CLIENT
+        // Skip current user (freelancer) - they shouldn't see this notification
+        if (clientAddress) {
+          addNotification(
+            createMilestoneNotification("submitted", escrowId, milestoneIndex, {
+              freelancerName:
+                wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+              projectTitle: escrow?.projectTitle || `Project #${escrowId}`,
+            }),
+            [clientAddress], // Notify ONLY the client
+            true // Skip current user - freelancer shouldn't see this
+          );
+        }
 
         // Mark this milestone as submitted to prevent double submission
         const milestoneKey = `${escrowId}-${milestoneIndex}`;
@@ -1030,15 +1033,19 @@ export default function FreelancerPage() {
         const escrow = escrows.find((e) => e.id === escrowId);
         const clientAddress = escrow?.payer;
 
-        // Add notification for milestone resubmission (notify the client)
-        addNotification(
-          createMilestoneNotification("submitted", escrowId, milestoneIndex, {
-            freelancerName:
-              wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-            projectTitle: escrow?.projectTitle || `Project #${escrowId}`,
-          }),
-          clientAddress ? [clientAddress] : undefined // Notify the client
-        );
+        // Add notification for milestone resubmission - notify ONLY the CLIENT
+        // Skip current user (freelancer) - they shouldn't see this notification
+        if (clientAddress) {
+          addNotification(
+            createMilestoneNotification("submitted", escrowId, milestoneIndex, {
+              freelancerName:
+                wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+              projectTitle: escrow?.projectTitle || `Project #${escrowId}`,
+            }),
+            [clientAddress], // Notify ONLY the client
+            true // Skip current user - freelancer shouldn't see this
+          );
+        }
 
         // Clear form and close dialog
         setResubmitDescription("");
