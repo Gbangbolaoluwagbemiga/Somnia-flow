@@ -1215,7 +1215,10 @@ export default function FreelancerPage() {
             createMilestoneNotification("submitted", escrowId, milestoneIndex, {
               freelancerName:
                 wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-              projectTitle: escrow?.projectTitle || `Project #${escrowId}`,
+              projectTitle:
+                escrow?.projectTitle ||
+                escrow?.projectDescription ||
+                `Project #${escrowId}`,
             }),
             clientAddress, // Notify ONLY the client
             undefined // No freelancer address (freelancer is current user)

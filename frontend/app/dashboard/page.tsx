@@ -701,6 +701,45 @@ export default function DashboardPage() {
                 }
               );
 
+              // Close any open approval modal by clearing submitting state
+              setSubmittingMilestone((prev) => {
+                if (prev === `${escrowId}-${milestoneIndex}`) {
+                  return null;
+                }
+                return prev;
+              });
+
+              // Show success toast when event is confirmed via Data Streams
+              toast({
+                title: "Milestone Approved!",
+                description: "Payment has been sent to the freelancer",
+              });
+
+              // Get escrow data for notification
+              const escrow = escrows.find((e) => e.id === escrowId);
+              if (escrow) {
+                const freelancerAddress = escrow.beneficiary;
+
+                // Add cross-wallet notification for milestone approval
+                addCrossWalletNotification(
+                  createMilestoneNotification(
+                    "approved",
+                    escrowId,
+                    milestoneIndex,
+                    {
+                      clientName:
+                        wallet.address!.slice(0, 6) +
+                        "..." +
+                        wallet.address!.slice(-4),
+                      projectTitle:
+                        escrow.projectDescription || `Project #${escrowId}`,
+                    }
+                  ),
+                  wallet.address || undefined, // Client address
+                  freelancerAddress // Freelancer address
+                );
+              }
+
               // Update UI reactively when milestone is approved
               setEscrows((prevEscrows) =>
                 prevEscrows.map((e) => {
@@ -1323,10 +1362,11 @@ export default function DashboardPage() {
         milestoneIndex
       );
 
-      // Wait for transaction confirmation
+      // Try to get receipt, but don't fail if it times out
+      // We'll rely on Somnia Data Streams to detect the approval event
       let receipt;
       let attempts = 0;
-      const maxAttempts = 30;
+      const maxAttempts = 15; // Reduced attempts - rely on Data Streams
 
       while (attempts < maxAttempts) {
         try {
@@ -1340,19 +1380,15 @@ export default function DashboardPage() {
         attempts++;
       }
 
-      if (!receipt) {
-        throw new Error(
-          "Transaction timeout - please check the blockchain explorer"
-        );
+      // If we got a receipt and it failed, show error immediately
+      if (receipt && receipt.status !== "0x1") {
+        throw new Error("Transaction failed on blockchain");
       }
 
-      if (receipt.status === "0x1") {
-        // Transaction confirmed - now show success toast
-        toast({
-          title: "Milestone Approved!",
-          description: "Payment has been sent to the freelancer",
-        });
-
+      // If we have a receipt and it succeeded, update UI immediately
+      // But also wait for Data Streams to confirm (handled in subscription)
+      if (receipt && receipt.status === "0x1") {
+        // Transaction confirmed - update UI immediately
         // Get freelancer address from escrow data
         const freelancerAddress = escrow.beneficiary;
 
@@ -1403,20 +1439,45 @@ export default function DashboardPage() {
           })
         );
 
+        // Show success toast
+        toast({
+          title: "Milestone Approved!",
+          description: "Payment has been sent to the freelancer",
+        });
+
+        // Close modal by clearing submitting state
+        setSubmittingMilestone(null);
+
         // Refresh from blockchain in background (non-blocking)
         fetchUserEscrows().catch((error) => {
           console.error("Error refreshing escrows:", error);
         });
       } else {
-        throw new Error("Transaction failed on blockchain");
+        // No receipt yet, but we have a txHash - transaction is pending
+        // Don't show error - wait for Somnia Data Streams to detect the event
+        // The subscription will handle UI updates and toast
+        toast({
+          title: "Transaction Submitted",
+          description:
+            "Transaction is pending. The UI will update automatically when confirmed.",
+          variant: "default",
+        });
+        // Keep submittingMilestone set so modal stays open until Data Streams confirms
+        // The subscription will clear it when the event is received
       }
     } catch (error: any) {
-      toast({
-        title: "Approval Failed",
-        description: error.message || "Failed to approve milestone",
-        variant: "destructive",
-      });
-    } finally {
+      // Only show error if it's a real failure (not a timeout)
+      const errorMessage = error.message || "Failed to approve milestone";
+      if (
+        !errorMessage.includes("timeout") &&
+        !errorMessage.includes("pending")
+      ) {
+        toast({
+          title: "Approval Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
       setSubmittingMilestone(null);
     }
   };

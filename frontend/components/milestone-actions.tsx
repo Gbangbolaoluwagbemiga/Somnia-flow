@@ -779,7 +779,14 @@ export function MilestoneActions({
                     createMilestoneNotification(
                       "submitted",
                       escrowId,
-                      milestoneIndex
+                      milestoneIndex,
+                      {
+                        freelancerName:
+                          beneficiaryAddress?.slice(0, 6) +
+                          "..." +
+                          beneficiaryAddress?.slice(-4),
+                        projectTitle: `Project #${escrowId}`,
+                      }
                     ),
                     payerAddress, // Notify ONLY the client
                     undefined // No freelancer address (freelancer is current user)
