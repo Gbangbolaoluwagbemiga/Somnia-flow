@@ -593,15 +593,9 @@ export default function FreelancerPage() {
     try {
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
 
-      // Get escrow details to debug
-      try {
-        const escrowSummary = await contract.call(
-          "getEscrowSummary",
-          Number(escrowId)
-        );
-      } catch (debugError) {
-        console.error("Failed to get escrow details:", debugError);
-      }
+      // Get escrow details before starting work
+      const escrow = escrows.find((e) => e.id === escrowId);
+      const clientAddress = escrow?.payer;
 
       toast({
         title: "Starting work...",
@@ -614,29 +608,61 @@ export default function FreelancerPage() {
         Number(escrowId)
       );
 
+      // Wait for transaction confirmation
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
+          if (receipt) break;
+        } catch (error) {
+          console.warn("Error checking receipt:", error);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts++;
+      }
+
+      if (!receipt || receipt.status !== "0x1") {
+        throw new Error("Transaction failed or was rejected");
+      }
+
+      // Optimistically update local state immediately
+      setEscrows((prevEscrows) =>
+        prevEscrows.map((e) =>
+          e.id === escrowId
+            ? { ...e, status: "active" } // Update status to active
+            : e
+        )
+      );
+
       toast({
         title: "Work started!",
         description: "You can now submit milestones for this project",
       });
 
-      // Get client address from escrow data
-      const escrow = escrows.find((e) => e.id === escrowId);
-      const clientAddress = escrow?.payer;
+      // Add notification for work started - notify ONLY the CLIENT
+      // Skip current user (freelancer) - they shouldn't see this notification
+      if (clientAddress) {
+        addNotification(
+          createEscrowNotification("work_started", escrowId, {
+            projectTitle:
+              escrow?.projectTitle ||
+              escrow?.projectDescription ||
+              `Project #${escrowId}`,
+            freelancerName:
+              wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+          }),
+          [clientAddress], // Notify ONLY the client
+          true // Skip current user - freelancer shouldn't see this
+        );
+      }
 
-      // Add cross-wallet notification for work started
-      addCrossWalletNotification(
-        createEscrowNotification("work_started", escrowId, {
-          projectTitle:
-            escrows.find((e) => e.id === escrowId)?.projectTitle ||
-            `Project #${escrowId}`,
-          freelancerName:
-            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-        }),
-        clientAddress, // Client address
-        wallet.address || undefined // Freelancer address
-      );
-
-      // Refresh escrows
+      // Refresh escrows from blockchain to get latest state
       await fetchFreelancerEscrows();
     } catch (error: any) {
       console.error("Start work error:", error);

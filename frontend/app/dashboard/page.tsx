@@ -1048,18 +1048,24 @@ export default function DashboardPage() {
       const escrow = escrows.find((e) => e.id === escrowId);
       const freelancerAddress = escrow?.beneficiary;
 
-      // Add cross-wallet notification for work started
-      addCrossWalletNotification(
-        createEscrowNotification("work_started", escrowId, {
-          projectTitle:
-            escrows.find((e) => e.id === escrowId)?.projectDescription ||
-            `Project #${escrowId}`,
-          freelancerName:
-            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-        }),
-        wallet.address || undefined, // Client address
-        freelancerAddress // Freelancer address
-      );
+      // Add notification for work started - notify ONLY the CLIENT
+      // Skip current user (if they're the freelancer) - they shouldn't see this notification
+      // Note: This function should only be called by freelancers, but we'll handle both cases
+      if (wallet.address && freelancerAddress) {
+        const isFreelancer =
+          wallet.address.toLowerCase() === freelancerAddress.toLowerCase();
+        addNotification(
+          createEscrowNotification("work_started", escrowId, {
+            projectTitle: escrow?.projectDescription || `Project #${escrowId}`,
+            freelancerName:
+              freelancerAddress.slice(0, 6) +
+              "..." +
+              freelancerAddress.slice(-4),
+          }),
+          [escrow?.payer || wallet.address], // Notify the client (payer)
+          isFreelancer // Skip current user if they're the freelancer
+        );
+      }
 
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
