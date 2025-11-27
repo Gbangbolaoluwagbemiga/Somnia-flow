@@ -26,7 +26,7 @@ interface NotificationContextType {
   unreadCount: number;
   addNotification: (
     notification: Omit<Notification, "id" | "timestamp" | "read">,
-    targetAddresses?: string[],
+    targetAddresses?: string[]
   ) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
@@ -35,12 +35,12 @@ interface NotificationContextType {
   addCrossWalletNotification: (
     notification: Omit<Notification, "id" | "timestamp" | "read">,
     clientAddress?: string,
-    freelancerAddress?: string,
+    freelancerAddress?: string
   ) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(
-  undefined,
+  undefined
 );
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
@@ -51,7 +51,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   // Load notifications from localStorage on mount and when wallet changes
   useEffect(() => {
     if (wallet.isConnected && wallet.address) {
-      const saved = localStorage.getItem(`notifications_${wallet.address}`);
+      // Use lowercase address for consistency
+      const addressKey = wallet.address.toLowerCase();
+      const saved = localStorage.getItem(`notifications_${addressKey}`);
       if (saved) {
         const parsedNotifications = JSON.parse(saved);
         // Convert timestamp strings back to Date objects
@@ -59,7 +61,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           (notif: any) => ({
             ...notif,
             timestamp: new Date(notif.timestamp),
-          }),
+          })
         );
         setNotifications(notificationsWithDates);
       } else {
@@ -75,9 +77,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   // Save notifications to localStorage when they change
   useEffect(() => {
     if (wallet.isConnected && wallet.address) {
+      // Use lowercase address for consistency
+      const addressKey = wallet.address.toLowerCase();
       localStorage.setItem(
-        `notifications_${wallet.address}`,
-        JSON.stringify(notifications),
+        `notifications_${addressKey}`,
+        JSON.stringify(notifications)
       );
     }
   }, [notifications, wallet.isConnected, wallet.address]);
@@ -85,31 +89,51 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const addNotification = (
     notification: Omit<Notification, "id" | "timestamp" | "read">,
     targetAddresses?: string[], // Optional: specific addresses to notify
+    skipCurrentUser: boolean = false // If true, don't add to current user unless they're in targetAddresses
   ) => {
     const newNotification: Notification = {
       ...notification,
-      id: `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `notification_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`,
       timestamp: new Date(),
       read: false,
     };
 
-    // Always add to current user's notifications
-    setNotifications((prev) => [newNotification, ...prev]);
+    // Check if current user should receive this notification
+    const currentUserAddress = wallet.address?.toLowerCase();
+    const shouldNotifyCurrentUser =
+      !skipCurrentUser ||
+      (targetAddresses &&
+        targetAddresses.some(
+          (addr) => addr.toLowerCase() === currentUserAddress
+        ));
+
+    // Only add to current user's notifications if they should receive it
+    if (shouldNotifyCurrentUser && currentUserAddress) {
+      setNotifications((prev) => [newNotification, ...prev]);
+    }
 
     // If target addresses are specified, also store for those addresses (cross-wallet notifications)
     if (targetAddresses && targetAddresses.length > 0) {
       targetAddresses.forEach((address) => {
-        if (address && address !== wallet.address) {
+        if (address) {
+          const addressLower = address.toLowerCase();
+          // Skip if it's the current user and we already added it above
+          if (addressLower === currentUserAddress && shouldNotifyCurrentUser) {
+            return;
+          }
+
           const existingNotifications = JSON.parse(
-            localStorage.getItem(`notifications_${address}`) || "[]",
+            localStorage.getItem(`notifications_${addressLower}`) || "[]"
           );
           const updatedNotifications = [
             newNotification,
             ...existingNotifications,
           ];
           localStorage.setItem(
-            `notifications_${address}`,
-            JSON.stringify(updatedNotifications),
+            `notifications_${addressLower}`,
+            JSON.stringify(updatedNotifications)
           );
         }
       });
@@ -127,14 +151,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const markAsRead = (id: string) => {
     setNotifications((prev) =>
       prev.map((notification) =>
-        notification.id === id ? { ...notification, read: true } : notification,
-      ),
+        notification.id === id ? { ...notification, read: true } : notification
+      )
     );
   };
 
   const markAllAsRead = () => {
     setNotifications((prev) =>
-      prev.map((notification) => ({ ...notification, read: true })),
+      prev.map((notification) => ({ ...notification, read: true }))
     );
   };
 
@@ -144,18 +168,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const removeNotification = (id: string) => {
     setNotifications((prev) =>
-      prev.filter((notification) => notification.id !== id),
+      prev.filter((notification) => notification.id !== id)
     );
   };
 
   const addCrossWalletNotification = (
     notification: Omit<Notification, "id" | "timestamp" | "read">,
     clientAddress?: string,
-    freelancerAddress?: string,
+    freelancerAddress?: string
   ) => {
     const newNotification: Notification = {
       ...notification,
-      id: `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `notification_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`,
       timestamp: new Date(),
       read: false,
     };
@@ -181,12 +207,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     // Send to all target addresses
     targetAddresses.forEach((address) => {
       const existingNotifications = JSON.parse(
-        localStorage.getItem(`notifications_${address}`) || "[]",
+        localStorage.getItem(`notifications_${address}`) || "[]"
       );
       const updatedNotifications = [newNotification, ...existingNotifications];
       localStorage.setItem(
         `notifications_${address}`,
-        JSON.stringify(updatedNotifications),
+        JSON.stringify(updatedNotifications)
       );
     });
 
@@ -223,7 +249,7 @@ export function useNotifications() {
   const context = useContext(NotificationContext);
   if (context === undefined) {
     throw new Error(
-      "useNotifications must be used within a NotificationProvider",
+      "useNotifications must be used within a NotificationProvider"
     );
   }
   return context;
@@ -234,7 +260,7 @@ export const createMilestoneNotification = (
   action: "submitted" | "approved" | "rejected" | "disputed",
   escrowId: string,
   milestoneIndex: number,
-  additionalData?: Record<string, any>,
+  additionalData?: Record<string, any>
 ): Omit<Notification, "id" | "timestamp" | "read"> => {
   const baseData = {
     escrowId,
@@ -247,7 +273,9 @@ export const createMilestoneNotification = (
       return {
         type: "milestone",
         title: "New Milestone Submitted",
-        message: `Milestone ${milestoneIndex + 1} has been submitted for review`,
+        message: `Milestone ${
+          milestoneIndex + 1
+        } has been submitted for review`,
         actionUrl: `/dashboard?escrow=${escrowId}`,
         data: baseData,
       };
@@ -255,7 +283,9 @@ export const createMilestoneNotification = (
       return {
         type: "milestone",
         title: "Milestone Approved!",
-        message: `Milestone ${milestoneIndex + 1} has been approved and payment released`,
+        message: `Milestone ${
+          milestoneIndex + 1
+        } has been approved and payment released`,
         actionUrl: `/freelancer?escrow=${escrowId}`,
         data: baseData,
       };
@@ -263,7 +293,9 @@ export const createMilestoneNotification = (
       return {
         type: "milestone",
         title: "Milestone Rejected",
-        message: `Milestone ${milestoneIndex + 1} has been rejected. Please review and resubmit`,
+        message: `Milestone ${
+          milestoneIndex + 1
+        } has been rejected. Please review and resubmit`,
         actionUrl: `/freelancer?escrow=${escrowId}`,
         data: baseData,
       };
@@ -271,7 +303,9 @@ export const createMilestoneNotification = (
       return {
         type: "dispute",
         title: "Milestone Disputed",
-        message: `Milestone ${milestoneIndex + 1} is under dispute and requires admin review`,
+        message: `Milestone ${
+          milestoneIndex + 1
+        } is under dispute and requires admin review`,
         actionUrl: `/admin?escrow=${escrowId}`,
         data: baseData,
       };
@@ -289,7 +323,7 @@ export const createMilestoneNotification = (
 export const createEscrowNotification = (
   action: "created" | "completed" | "refunded" | "work_started",
   escrowId: string,
-  additionalData?: Record<string, any>,
+  additionalData?: Record<string, any>
 ): Omit<Notification, "id" | "timestamp" | "read"> => {
   const baseData = {
     escrowId,
@@ -325,7 +359,11 @@ export const createEscrowNotification = (
       return {
         type: "escrow",
         title: "Work Started!",
-        message: `${additionalData?.freelancerName || "Freelancer"} has started work on ${additionalData?.projectTitle || `Project #${escrowId}`}`,
+        message: `${
+          additionalData?.freelancerName || "Freelancer"
+        } has started work on ${
+          additionalData?.projectTitle || `Project #${escrowId}`
+        }`,
         actionUrl: `/dashboard?escrow=${escrowId}`,
         data: baseData,
       };
@@ -344,7 +382,7 @@ export const createApplicationNotification = (
   action: "submitted" | "approved" | "rejected",
   jobId: number,
   freelancerAddress: string,
-  additionalData?: Record<string, any>,
+  additionalData?: Record<string, any>
 ): Omit<Notification, "id" | "timestamp" | "read"> => {
   const baseData = {
     jobId,
@@ -357,7 +395,9 @@ export const createApplicationNotification = (
       return {
         type: "application",
         title: "New Job Application",
-        message: `Someone applied to your job: ${additionalData?.jobTitle || `Job #${jobId}`}`,
+        message: `Someone applied to your job: ${
+          additionalData?.jobTitle || `Job #${jobId}`
+        }`,
         actionUrl: `/approvals?job=${jobId}`,
         data: baseData,
       };
@@ -365,7 +405,9 @@ export const createApplicationNotification = (
       return {
         type: "application",
         title: "Application Approved!",
-        message: `Your application for ${additionalData?.jobTitle || `Job #${jobId}`} has been approved`,
+        message: `Your application for ${
+          additionalData?.jobTitle || `Job #${jobId}`
+        } has been approved`,
         actionUrl: `/freelancer?job=${jobId}`,
         data: baseData,
       };
@@ -373,7 +415,9 @@ export const createApplicationNotification = (
       return {
         type: "application",
         title: "Application Rejected",
-        message: `Your application for ${additionalData?.jobTitle || `Job #${jobId}`} was not selected`,
+        message: `Your application for ${
+          additionalData?.jobTitle || `Job #${jobId}`
+        } was not selected`,
         actionUrl: `/freelancer?job=${jobId}`,
         data: baseData,
       };
@@ -381,7 +425,9 @@ export const createApplicationNotification = (
       return {
         type: "application",
         title: "Application Update",
-        message: `Application status updated for ${additionalData?.jobTitle || `Job #${jobId}`}`,
+        message: `Application status updated for ${
+          additionalData?.jobTitle || `Job #${jobId}`
+        }`,
         actionUrl: `/approvals?job=${jobId}`,
         data: baseData,
       };

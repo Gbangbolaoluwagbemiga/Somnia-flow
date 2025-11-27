@@ -500,7 +500,7 @@ export default function JobsPage() {
       }
 
       // Call the smart contract applyToJob function
-      await contract.send(
+      const txHash = await contract.send(
         "applyToJob",
         "no-value",
         job.id,
@@ -510,11 +510,40 @@ export default function JobsPage() {
 
       toast({
         title: "Application Submitted!",
+        description: "Waiting for transaction confirmation...",
+      });
+
+      // Wait for transaction confirmation
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
+          if (receipt) break;
+        } catch (error) {
+          console.warn("Error checking receipt:", error);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts++;
+      }
+
+      if (!receipt || receipt.status !== "0x1") {
+        throw new Error("Transaction failed or was rejected");
+      }
+
+      toast({
+        title: "Application Confirmed!",
         description:
           "The client will review your application and get back to you.",
       });
 
-      // Add notification for job application submission - notify the CLIENT (job creator)
+      // Add notification for job application submission - notify ONLY the CLIENT (job creator)
+      // Skip current user (freelancer) - they shouldn't see this notification
       addNotification(
         createApplicationNotification(
           "submitted",
@@ -526,7 +555,8 @@ export default function JobsPage() {
               wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
           }
         ),
-        [job.payer] // Notify the client (job creator)
+        [job.payer], // Notify ONLY the client (job creator)
+        true // Skip current user - freelancer shouldn't see this
       );
 
       setCoverLetter("");

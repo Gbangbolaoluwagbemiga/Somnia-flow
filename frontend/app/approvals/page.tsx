@@ -487,7 +487,8 @@ export default function ApprovalsPage() {
         description: "The freelancer has been approved for this job",
       });
 
-      // Add notification for freelancer approval - notify the FREELANCER
+      // Add notification for freelancer approval - notify ONLY the FREELANCER
+      // Skip current user (job creator) - they shouldn't see this notification
       addNotification(
         createApplicationNotification(
           "approved",
@@ -503,7 +504,8 @@ export default function ApprovalsPage() {
               selectedFreelancer.freelancerAddress.slice(-4),
           }
         ),
-        [selectedFreelancer.freelancerAddress] // Notify the freelancer
+        [selectedFreelancer.freelancerAddress], // Notify ONLY the freelancer
+        true // Skip current user - job creator shouldn't see this
       );
 
       // Close modals first
