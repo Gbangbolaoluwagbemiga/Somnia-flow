@@ -653,9 +653,45 @@ export default function DashboardPage() {
             const milestoneIndex = Number(milestoneIndexField.value);
             const status = Number(statusField.value);
 
-            // Status 2 = approved, Status 5 = rejected (based on MilestoneStatus enum)
+            // Status 1 = submitted, Status 2 = approved, Status 5 = rejected (based on MilestoneStatus enum)
             // Enum: NotStarted(0), Submitted(1), Approved(2), Disputed(3), Resolved(4), Rejected(5)
-            if (status === 2) {
+            if (status === 1) {
+              // Milestone submitted/resubmitted
+              console.log(
+                "📊 Milestone submitted/resubmitted event received via Somnia Data Streams:",
+                {
+                  escrowId,
+                  milestoneIndex,
+                  status,
+                }
+              );
+
+              // Update UI reactively when milestone is submitted/resubmitted
+              setEscrows((prevEscrows) =>
+                prevEscrows.map((e) => {
+                  if (e.id === escrowId) {
+                    const updatedMilestones = [...e.milestones];
+                    if (updatedMilestones[milestoneIndex]) {
+                      updatedMilestones[milestoneIndex] = {
+                        ...updatedMilestones[milestoneIndex],
+                        status: "submitted" as const,
+                        submittedAt: Date.now(),
+                        // Clear rejection reason if it was a resubmission
+                        rejectionReason: undefined,
+                      };
+                    }
+                    return {
+                      ...e,
+                      milestones: updatedMilestones,
+                    };
+                  }
+                  return e;
+                })
+              );
+
+              // Refresh from blockchain in background to ensure accuracy
+              fetchUserEscrows().catch(console.error);
+            } else if (status === 2) {
               // Milestone approved
               console.log(
                 "📊 Milestone approved event received via Somnia Data Streams:",
@@ -1455,18 +1491,18 @@ export default function DashboardPage() {
         // Get freelancer address from escrow data
         const freelancerAddress = escrow.beneficiary;
 
-        // Add notification for milestone rejection - notify ONLY the FREELANCER
-        // Skip current user (client) - they shouldn't see this notification
+        // Add cross-wallet notification for milestone rejection - notify ONLY the FREELANCER
+        // This ensures the notification is stored in the freelancer's localStorage
         if (freelancerAddress) {
-          addNotification(
+          addCrossWalletNotification(
             createMilestoneNotification("rejected", escrowId, milestoneIndex, {
               reason: reason,
               clientName:
                 wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
               projectTitle: escrow.projectDescription || `Project #${escrowId}`,
             }),
-            [freelancerAddress], // Notify ONLY the freelancer
-            true // Skip current user - client shouldn't see this
+            undefined, // No client address (client is current user)
+            freelancerAddress // Notify ONLY the freelancer
           );
         }
 

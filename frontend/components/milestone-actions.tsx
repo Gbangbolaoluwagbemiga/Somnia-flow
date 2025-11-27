@@ -622,18 +622,18 @@ export function MilestoneActions({
                     "The milestone has been rejected and the freelancer can resubmit",
                 });
 
-                // Add notification for milestone rejection - notify ONLY the FREELANCER
-                // Skip current user (client) - they shouldn't see this notification
+                // Add cross-wallet notification for milestone rejection - notify ONLY the FREELANCER
+                // This ensures the notification is stored in the freelancer's localStorage
                 if (beneficiaryAddress) {
-                  addNotification(
+                  addCrossWalletNotification(
                     createMilestoneNotification(
                       "rejected",
                       escrowId,
                       milestoneIndex,
                       { reason: disputeReason }
                     ),
-                    [beneficiaryAddress], // Notify ONLY the freelancer
-                    true // Skip current user - client shouldn't see this
+                    undefined, // No client address (client is current user)
+                    beneficiaryAddress // Notify ONLY the freelancer
                   );
                 }
 
@@ -733,11 +733,6 @@ export function MilestoneActions({
                 CONTRACTS.SECUREFLOW_ESCROW,
                 data
               );
-              toast({
-                title: "🚀 Smart Account Milestone resubmitted!",
-                description:
-                  "Milestone resubmitted using Smart Account with enhanced features",
-              });
             } else {
               // Use regular transaction
               txHash = await contract.send(
@@ -769,44 +764,83 @@ export function MilestoneActions({
                 receipt = await pollTransactionReceipt(txHash);
               }
 
-              if (receipt.status === 1) {
+              if (receipt && receipt.status === 1) {
+                // Transaction confirmed - now show success toast
                 toast({
                   title: "Milestone resubmitted!",
                   description:
                     "The milestone has been resubmitted and is waiting for client review",
                 });
 
-                // Add notification for milestone resubmission - notify ONLY the CLIENT
-                // Skip current user (freelancer) - they shouldn't see this notification
+                // Add cross-wallet notification for milestone resubmission - notify ONLY the CLIENT
+                // This ensures the notification is stored in the client's localStorage
                 if (payerAddress) {
-                  addNotification(
+                  addCrossWalletNotification(
                     createMilestoneNotification(
                       "submitted",
                       escrowId,
                       milestoneIndex
                     ),
-                    [payerAddress], // Notify ONLY the client
-                    true // Skip current user - freelancer shouldn't see this
+                    payerAddress, // Notify ONLY the client
+                    undefined // No freelancer address (freelancer is current user)
                   );
                 }
 
-                setDialogOpen(false);
+                // Optimistically update UI immediately
                 onSuccess();
+
+                setDialogOpen(false);
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
             } catch (receiptError: any) {
               if (txHash) {
-                toast({
-                  title: "Milestone resubmitted!",
-                  description:
-                    "The milestone has been resubmitted and is waiting for client review",
-                });
-                setDialogOpen(false);
-                onSuccess();
-                return;
+                // Try polling one more time for receipt
+                try {
+                  const finalReceipt = await pollTransactionReceipt(txHash);
+                  if (finalReceipt && finalReceipt.status === 1) {
+                    // Transaction confirmed - show success
+                    toast({
+                      title: "Milestone resubmitted!",
+                      description:
+                        "The milestone has been resubmitted and is waiting for client review",
+                    });
+
+                    // Add cross-wallet notification for client
+                    if (payerAddress) {
+                      addCrossWalletNotification(
+                        createMilestoneNotification(
+                          "submitted",
+                          escrowId,
+                          milestoneIndex
+                        ),
+                        payerAddress,
+                        undefined
+                      );
+                    }
+
+                    onSuccess();
+                    setDialogOpen(false);
+                    return;
+                  }
+                } catch (finalError) {
+                  console.error("Final receipt check failed:", finalError);
+                }
               }
-              throw new Error("Transaction failed to confirm on blockchain");
+
+              // Only throw error if we don't have a transaction hash
+              // If we have a hash, the transaction might still be pending
+              if (!txHash) {
+                throw new Error("Transaction failed to confirm on blockchain");
+              } else {
+                // Transaction submitted but confirmation failed - show pending message
+                toast({
+                  title: "Transaction Pending",
+                  description:
+                    "Transaction is taking longer than expected. Please check the blockchain explorer.",
+                  variant: "default",
+                });
+              }
             }
           } catch (error: any) {
             toast({
