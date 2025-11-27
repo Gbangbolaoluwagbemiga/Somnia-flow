@@ -9,7 +9,7 @@
 
 SecureFlow is a comprehensive decentralized platform combining escrow services with a freelance marketplace, **powered by Somnia Data Streams** for real-time, reactive updates. Built on **Somnia Testnet**, it features gasless transactions, multi-arbiter dispute resolution, reputation systems, and **real-time data streaming** for instant notifications and live updates.
 
-> **Built for Somnia Data Streams Mini Hackathon (Nov 4-15, 2025)**
+> **Built for Somnia Data Streams Mini Hackathon**
 
 ## ✨ Key Features
 
