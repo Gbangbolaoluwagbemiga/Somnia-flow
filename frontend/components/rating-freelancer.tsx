@@ -97,18 +97,36 @@ export function RateFreelancer({
         console.log("Rating check:", checkError);
       }
 
-      await contract.send("rateFreelancer", "no-value", escrowId, rating);
+      const txHash = await contract.send(
+        "rateFreelancer",
+        "no-value",
+        escrowId,
+        rating
+      );
 
+      // Wait for transaction confirmation (but don't block - let Data Streams handle UI update)
+      // Show pending toast
       toast({
         title: "Rating submitted",
-        description: `You rated this freelancer ${rating} out of 5 stars`,
+        description:
+          "Transaction is pending. The UI will update automatically when confirmed.",
+        variant: "default",
       });
 
+      // Optimistically update UI
       setHasRated(true);
       setCurrentRating(rating);
       setIsOpen(false);
       setRating(0);
-      if (onRated) onRated();
+
+      // Call onRated callback to refresh data
+      // The Data Streams subscription will handle the final UI update
+      if (onRated) {
+        // Delay slightly to allow transaction to be mined
+        setTimeout(() => {
+          onRated();
+        }, 2000);
+      }
     } catch (error: any) {
       console.error("Error submitting rating:", error);
       // Check if error is because already rated

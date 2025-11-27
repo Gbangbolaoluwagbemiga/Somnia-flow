@@ -17,6 +17,7 @@ import {
   ESCROW_STATUS_SCHEMA,
   APPLICATION_SCHEMA,
   DISPUTE_SCHEMA,
+  RATING_SCHEMA,
   EVENT_SCHEMA_IDS,
 } from "@/lib/somnia/schemas";
 import { useWeb3 } from "./web3-context";
@@ -41,17 +42,17 @@ interface SomniaStreamsContextType {
     escrowId: string,
     onData: (data: any) => void
   ) => Promise<() => void>;
+  subscribeToRatings: (
+    escrowId: string,
+    onData: (data: any) => void
+  ) => Promise<() => void>;
 }
 
 const SomniaStreamsContext = createContext<
   SomniaStreamsContextType | undefined
 >(undefined);
 
-export function SomniaStreamsProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
   const { wallet } = useWeb3();
   const [sdk, setSdk] = useState<SDK | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -304,6 +305,49 @@ export function SomniaStreamsProvider({
     [sdk]
   );
 
+  const subscribeToRatings = useCallback(
+    async (escrowId: string, onData: (data: any) => void) => {
+      if (!sdk) {
+        throw new Error("Somnia SDK not initialized");
+      }
+
+      try {
+        const subscription = await sdk.streams.subscribe({
+          somniaStreamsEventId: EVENT_SCHEMA_IDS.FREELANCER_RATED,
+          ethCalls: [],
+          context: "topic1", // escrowId in event
+          onData: (data) => {
+            // Filter by escrowId
+            const encoder = new SchemaEncoder(RATING_SCHEMA);
+            const decoded = Array.isArray(data) ? data : [data];
+            decoded.forEach((item) => {
+              const fields = item.data || item;
+              const escrowIdField = fields.find(
+                (f: any) => f.name === "escrowId"
+              );
+              if (escrowIdField?.value === escrowId) {
+                onData(item);
+              }
+            });
+          },
+          onError: (error) => console.error("Subscription error:", error),
+          onlyPushChanges: true,
+        });
+
+        if (subscription) {
+          const key = `ratings_${escrowId}_${Date.now()}`;
+          setSubscriptions((prev) => new Map(prev.set(key, subscription)));
+          return subscription.unsubscribe;
+        }
+      } catch (error) {
+        console.error("Error subscribing to ratings:", error);
+      }
+
+      return () => {};
+    },
+    [sdk]
+  );
+
   return (
     <SomniaStreamsContext.Provider
       value={{
@@ -314,6 +358,7 @@ export function SomniaStreamsProvider({
         subscribeToEscrowStatus,
         subscribeToApplications,
         subscribeToDisputes,
+        subscribeToRatings,
       }}
     >
       {children}
@@ -330,4 +375,3 @@ export function useSomniaStreams() {
   }
   return context;
 }
-

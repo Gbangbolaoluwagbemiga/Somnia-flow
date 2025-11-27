@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { Clock, DollarSign, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
 import { RateFreelancer } from "@/components/rating-freelancer";
+import { useWeb3 } from "@/contexts/web3-context";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 
 interface EscrowCardProps {
@@ -47,6 +48,20 @@ export function EscrowCard({
   rating,
   onRatingSubmitted,
 }: EscrowCardProps) {
+  const { wallet } = useWeb3();
+
+  // Check if current user is the client (payer) for rating purposes
+  const isClient =
+    escrow.isClient ||
+    (wallet.address &&
+      escrow.payer.toLowerCase() === wallet.address.toLowerCase());
+
+  // Check if escrow is completed (status is "completed" or all milestones are approved)
+  const isCompleted =
+    escrow.status === "completed" ||
+    (escrow.milestones.length > 0 &&
+      escrow.milestones.every((m) => m.status === "approved"));
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
@@ -256,19 +271,24 @@ export function EscrowCard({
             {expandedEscrow === escrow.id && (
               <div className="space-y-4 pt-4 border-t">
                 {/* Rating Section for Completed Escrows */}
-                {escrow.status === "completed" && escrow.isClient && (
-                  <div className="p-4 bg-muted/20 rounded-lg border">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">Rate Freelancer</h4>
+                {/* Show rating section if escrow is completed and user is the client (payer) */}
+                {isCompleted &&
+                  isClient &&
+                  escrow.beneficiary &&
+                  escrow.beneficiary !==
+                    "0x0000000000000000000000000000000000000000" && (
+                    <div className="p-4 bg-muted/20 rounded-lg border">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium">Rate Freelancer</h4>
+                      </div>
+                      <RateFreelancer
+                        escrowId={escrow.id}
+                        freelancerAddress={escrow.beneficiary}
+                        onRated={onRatingSubmitted}
+                        existingRating={rating}
+                      />
                     </div>
-                    <RateFreelancer
-                      escrowId={escrow.id}
-                      freelancerAddress={escrow.beneficiary}
-                      onRated={onRatingSubmitted}
-                      existingRating={rating}
-                    />
-                  </div>
-                )}
+                  )}
 
                 <div className="space-y-2">
                   <h4 className="font-medium">Milestones:</h4>

@@ -42,8 +42,11 @@ export default function DashboardPage() {
   const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
   const { addNotification, addCrossWalletNotification } = useNotifications();
-  const { subscribeToMilestoneUpdates, subscribeToEscrowStatus } =
-    useSomniaStreams();
+  const {
+    subscribeToMilestoneUpdates,
+    subscribeToEscrowStatus,
+    subscribeToRatings,
+  } = useSomniaStreams();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
@@ -844,6 +847,87 @@ export default function DashboardPage() {
     wallet.isConnected,
     escrows.map((e) => e.id).join(","),
     subscribeToMilestoneUpdates,
+  ]);
+
+  // Subscribe to rating events using Somnia Data Streams
+  useEffect(() => {
+    if (!wallet.isConnected || !subscribeToRatings || escrows.length === 0)
+      return;
+
+    const unsubscribeFunctions: (() => void)[] = [];
+
+    // Subscribe to rating events for all completed escrows
+    escrows.forEach((escrow) => {
+      if (escrow.status === "completed" && escrow.isClient) {
+        subscribeToRatings(escrow.id, (data) => {
+          try {
+            const fields = data.data || data;
+            const escrowIdField = fields.find(
+              (f: any) => f.name === "escrowId"
+            );
+            const ratingField = fields.find((f: any) => f.name === "rating");
+            const raterField = fields.find((f: any) => f.name === "rater");
+
+            if (escrowIdField && ratingField && raterField) {
+              const escrowId = escrowIdField.value;
+              const rating = Number(ratingField.value);
+              const rater = raterField.value;
+
+              // Only update if the current user is the rater
+              if (
+                rater.toLowerCase() === wallet.address?.toLowerCase() &&
+                escrowId === escrow.id
+              ) {
+                console.log(
+                  "📊 Rating event received via Somnia Data Streams:",
+                  {
+                    escrowId,
+                    rating,
+                  }
+                );
+
+                // Update rating state immediately
+                setEscrowRatings((prev) => ({
+                  ...prev,
+                  [escrowId]: {
+                    rating: rating,
+                    exists: true,
+                  },
+                }));
+
+                // Refresh escrows to get updated data
+                fetchUserEscrows().catch(console.error);
+              }
+            }
+          } catch (error) {
+            console.error("Error processing rating update:", error);
+          }
+        })
+          .then((unsubscribe) => {
+            if (unsubscribe) unsubscribeFunctions.push(unsubscribe);
+          })
+          .catch(console.error);
+      }
+    });
+
+    // Cleanup subscriptions on unmount or when escrow IDs change
+    return () => {
+      unsubscribeFunctions.forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error("Error unsubscribing:", error);
+        }
+      });
+    };
+  }, [
+    wallet.isConnected,
+    wallet.address,
+    escrows
+      .filter((e) => e.status === "completed" && e.isClient)
+      .map((e) => e.id)
+      .join(","),
+    subscribeToRatings,
   ]);
 
   const fetchUserEscrows = async () => {
