@@ -653,8 +653,10 @@ export default function DashboardPage() {
             const milestoneIndex = Number(milestoneIndexField.value);
             const status = Number(statusField.value);
 
-            // Status 2 = approved (based on MilestoneStatus enum)
+            // Status 2 = approved, Status 5 = rejected (based on MilestoneStatus enum)
+            // Enum: NotStarted(0), Submitted(1), Approved(2), Disputed(3), Resolved(4), Rejected(5)
             if (status === 2) {
+              // Milestone approved
               console.log(
                 "📊 Milestone approved event received via Somnia Data Streams:",
                 {
@@ -693,6 +695,46 @@ export default function DashboardPage() {
                       milestones: updatedMilestones,
                       releasedAmount: newReleasedAmount.toString(),
                       status: allApproved ? "completed" : e.status,
+                    };
+                  }
+                  return e;
+                })
+              );
+
+              // Refresh from blockchain in background to ensure accuracy
+              fetchUserEscrows().catch(console.error);
+            } else if (status === 5) {
+              // Milestone rejected (Status 5, not 3)
+              console.log(
+                "📊 Milestone rejected event received via Somnia Data Streams:",
+                {
+                  escrowId,
+                  milestoneIndex,
+                  status,
+                }
+              );
+
+              // Get rejection reason from event data if available
+              const reasonField = fields.find(
+                (f: any) => f.name === "reason" || f.name === "description"
+              );
+              const rejectionReason = reasonField?.value || "";
+
+              // Update UI reactively when milestone is rejected
+              setEscrows((prevEscrows) =>
+                prevEscrows.map((e) => {
+                  if (e.id === escrowId) {
+                    const updatedMilestones = [...e.milestones];
+                    if (updatedMilestones[milestoneIndex]) {
+                      updatedMilestones[milestoneIndex] = {
+                        ...updatedMilestones[milestoneIndex],
+                        status: "rejected" as const,
+                        rejectionReason: rejectionReason,
+                      };
+                    }
+                    return {
+                      ...e,
+                      milestones: updatedMilestones,
                     };
                   }
                   return e;
@@ -1404,25 +1446,75 @@ export default function DashboardPage() {
       }
 
       if (receipt.status === "0x1") {
+        // Transaction confirmed - now show success toast
         toast({
           title: "Milestone Rejected",
           description: "The freelancer has been notified and can resubmit",
         });
-        await fetchUserEscrows();
 
-        // Reload the page to ensure UI is fully updated
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
+        // Get freelancer address from escrow data
+        const freelancerAddress = escrow.beneficiary;
+
+        // Add notification for milestone rejection - notify ONLY the FREELANCER
+        // Skip current user (client) - they shouldn't see this notification
+        if (freelancerAddress) {
+          addNotification(
+            createMilestoneNotification("rejected", escrowId, milestoneIndex, {
+              reason: reason,
+              clientName:
+                wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+              projectTitle: escrow.projectDescription || `Project #${escrowId}`,
+            }),
+            [freelancerAddress], // Notify ONLY the freelancer
+            true // Skip current user - client shouldn't see this
+          );
+        }
+
+        // Optimistically update UI immediately
+        setEscrows((prevEscrows) =>
+          prevEscrows.map((e) => {
+            if (e.id === escrowId) {
+              const updatedMilestones = [...e.milestones];
+              if (updatedMilestones[milestoneIndex]) {
+                updatedMilestones[milestoneIndex] = {
+                  ...updatedMilestones[milestoneIndex],
+                  status: "rejected" as const,
+                  rejectionReason: reason,
+                };
+              }
+              return {
+                ...e,
+                milestones: updatedMilestones,
+              };
+            }
+            return e;
+          })
+        );
+
+        // Refresh from blockchain in background (non-blocking)
+        fetchUserEscrows().catch((error) => {
+          console.error("Error refreshing escrows:", error);
+        });
       } else {
         throw new Error("Transaction failed on blockchain");
       }
     } catch (error: any) {
-      toast({
-        title: "Rejection Failed",
-        description: error.message || "Failed to reject milestone",
-        variant: "destructive",
-      });
+      // Only show error if it's a real failure, not a timeout that might still succeed
+      const errorMessage = error.message || "Failed to reject milestone";
+      if (errorMessage.includes("timeout")) {
+        toast({
+          title: "Transaction Pending",
+          description:
+            "Transaction is taking longer than expected. Please check the blockchain explorer to see if it was successful.",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Rejection Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } finally {
       setSubmittingMilestone(null);
     }

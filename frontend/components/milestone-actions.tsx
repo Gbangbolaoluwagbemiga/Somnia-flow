@@ -583,11 +583,6 @@ export function MilestoneActions({
                 CONTRACTS.SECUREFLOW_ESCROW,
                 data
               );
-              toast({
-                title: "🚀 Smart Account Milestone rejected!",
-                description:
-                  "Milestone rejected using Smart Account with enhanced features",
-              });
             } else {
               // Use regular transaction
               txHash = await contract.send(
@@ -619,24 +614,28 @@ export function MilestoneActions({
                 receipt = await pollTransactionReceipt(txHash);
               }
 
-              if (receipt.status === 1) {
+              if (receipt && receipt.status === 1) {
+                // Transaction confirmed - now show success toast
                 toast({
                   title: "Milestone rejected!",
                   description:
                     "The milestone has been rejected and the freelancer can resubmit",
                 });
 
-                // Add cross-wallet notification - notify both CLIENT and FREELANCER
-                addCrossWalletNotification(
-                  createMilestoneNotification(
-                    "rejected",
-                    escrowId,
-                    milestoneIndex,
-                    { reason: disputeReason }
-                  ),
-                  payerAddress, // Client address
-                  beneficiaryAddress // Freelancer address
-                );
+                // Add notification for milestone rejection - notify ONLY the FREELANCER
+                // Skip current user (client) - they shouldn't see this notification
+                if (beneficiaryAddress) {
+                  addNotification(
+                    createMilestoneNotification(
+                      "rejected",
+                      escrowId,
+                      milestoneIndex,
+                      { reason: disputeReason }
+                    ),
+                    [beneficiaryAddress], // Notify ONLY the freelancer
+                    true // Skip current user - client shouldn't see this
+                  );
+                }
 
                 setDialogOpen(false);
                 onSuccess();
@@ -649,11 +648,27 @@ export function MilestoneActions({
                 try {
                   const finalReceipt = await pollTransactionReceipt(txHash);
                   if (finalReceipt && finalReceipt.status === 1) {
+                    // Transaction confirmed - show success
                     toast({
                       title: "Milestone rejected!",
                       description:
                         "The milestone has been rejected and the freelancer can resubmit",
                     });
+
+                    // Add notification for freelancer
+                    if (beneficiaryAddress) {
+                      addNotification(
+                        createMilestoneNotification(
+                          "rejected",
+                          escrowId,
+                          milestoneIndex,
+                          { reason: disputeReason }
+                        ),
+                        [beneficiaryAddress],
+                        true
+                      );
+                    }
+
                     setDialogOpen(false);
                     onSuccess();
                     return;
@@ -662,14 +677,31 @@ export function MilestoneActions({
                   console.error("Final receipt check failed:", finalError);
                 }
               }
-              throw new Error("Transaction failed to confirm on blockchain");
+
+              // Only throw error if we don't have a transaction hash
+              // If we have a hash, the transaction might still be pending
+              if (!txHash) {
+                throw new Error("Transaction failed to confirm on blockchain");
+              } else {
+                // Transaction submitted but confirmation failed - show pending message
+                toast({
+                  title: "Transaction Pending",
+                  description:
+                    "Transaction is taking longer than expected. Please check the blockchain explorer.",
+                  variant: "default",
+                });
+              }
             }
           } catch (error: any) {
-            toast({
-              title: "Rejection failed",
-              description: error.message || "Failed to reject milestone",
-              variant: "destructive",
-            });
+            // Only show error if it's a real failure
+            const errorMessage = error.message || "Failed to reject milestone";
+            if (!errorMessage.includes("Pending")) {
+              toast({
+                title: "Rejection failed",
+                description: errorMessage,
+                variant: "destructive",
+              });
+            }
             return;
           } finally {
             setIsLoading(false);
