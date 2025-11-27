@@ -535,19 +535,38 @@ export default function FreelancerPage() {
             "getFreelancerRating",
             wallet.address
           );
-          if (
-            ratingData &&
-            Array.isArray(ratingData) &&
-            ratingData.length >= 2
-          ) {
-            // ratingData: [averageRating, totalRatings]
+
+          let averageRating = 0;
+          let totalRatings = 0;
+
+          // Handle different possible return formats
+          if (ratingData) {
+            if (Array.isArray(ratingData) && ratingData.length >= 2) {
+              // Format: [averageRating, totalRatings]
+              averageRating = Number(ratingData[0]) || 0;
+              totalRatings = Number(ratingData[1]) || 0;
+            } else if (typeof ratingData === "object" && ratingData !== null) {
+              // Format: { averageRating, totalRatings } or { 0: averageRating, 1: totalRatings }
+              averageRating =
+                Number(ratingData[0] ?? ratingData.averageRating ?? 0) || 0;
+              totalRatings =
+                Number(ratingData[1] ?? ratingData.totalRatings ?? 0) || 0;
+            }
+
             // averageRating is stored as percentage (0-500), divide by 100 for actual rating
-            const averageRating = Number(ratingData[0]) / 100;
-            const totalRatings = Number(ratingData[1]);
+            // Only divide if it's greater than 5 (meaning it's in percentage format)
+            if (averageRating > 5) {
+              averageRating = averageRating / 100;
+            }
+
             setFreelancerRating({ averageRating, totalRatings });
+          } else {
+            // No rating data - set to default (will show N/A)
+            setFreelancerRating({ averageRating: 0, totalRatings: 0 });
           }
         } catch (error) {
-          console.log("Error fetching freelancer rating:", error);
+          console.error("Error fetching freelancer rating:", error);
+          // Set to default values (will show N/A) instead of null
           setFreelancerRating({ averageRating: 0, totalRatings: 0 });
         }
 

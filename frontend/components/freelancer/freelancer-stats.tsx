@@ -173,13 +173,19 @@ export function FreelancerStats({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {freelancerRating && freelancerRating.totalRatings > 0
+            {freelancerRating &&
+            freelancerRating.totalRatings > 0 &&
+            freelancerRating.averageRating > 0
               ? freelancerRating.averageRating.toFixed(1)
               : "N/A"}
           </div>
           <p className="text-xs text-muted-foreground">
-            {freelancerRating && freelancerRating.totalRatings > 0
-              ? `${freelancerRating.totalRatings} ratings`
+            {freelancerRating &&
+            freelancerRating.totalRatings > 0 &&
+            freelancerRating.averageRating > 0
+              ? `${freelancerRating.totalRatings} ${
+                  freelancerRating.totalRatings === 1 ? "rating" : "ratings"
+                }`
               : "No ratings yet"}
           </p>
         </CardContent>
