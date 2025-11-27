@@ -26,7 +26,8 @@ interface NotificationContextType {
   unreadCount: number;
   addNotification: (
     notification: Omit<Notification, "id" | "timestamp" | "read">,
-    targetAddresses?: string[]
+    targetAddresses?: string[],
+    skipCurrentUser?: boolean
   ) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;

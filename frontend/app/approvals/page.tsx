@@ -360,8 +360,10 @@ export default function ApprovalsPage() {
                             proposedTimeline,
                             appliedAt: appliedAt * 1000, // Convert to milliseconds
                             status: "pending" as const,
-                            averageRating,
-                            totalRatings,
+                            ...(averageRating !== undefined && {
+                              averageRating,
+                            }),
+                            ...(totalRatings !== undefined && { totalRatings }),
                           };
 
                           applications.push(application);
@@ -379,7 +381,7 @@ export default function ApprovalsPage() {
                             status: "pending" as const,
                             averageRating: 0,
                             totalRatings: 0,
-                          };
+                          } as Application;
 
                           // Check for duplicate fallback applications too
                           const existingFallback = applications.find(
