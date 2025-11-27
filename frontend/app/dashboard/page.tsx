@@ -14,6 +14,7 @@ import {
   createEscrowNotification,
   createMilestoneNotification,
 } from "@/contexts/notification-context";
+import { useSomniaStreams } from "@/contexts/somnia-streams-context";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 import { motion } from "framer-motion";
 import {
@@ -41,6 +42,8 @@ export default function DashboardPage() {
   const { wallet, getContract } = useWeb3();
   const { toast } = useToast();
   const { addNotification, addCrossWalletNotification } = useNotifications();
+  const { subscribeToMilestoneUpdates, subscribeToEscrowStatus } =
+    useSomniaStreams();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
@@ -623,6 +626,109 @@ export default function DashboardPage() {
     }
   }, [wallet.isConnected]);
 
+  // Subscribe to milestone updates using Somnia Data Streams
+  useEffect(() => {
+    if (
+      !wallet.isConnected ||
+      !subscribeToMilestoneUpdates ||
+      escrows.length === 0
+    )
+      return;
+
+    const unsubscribeFunctions: (() => void)[] = [];
+    const escrowIds = escrows.map((e) => e.id);
+    const escrowIdsString = escrowIds.join(",");
+
+    // Subscribe to milestone updates for all user's escrows
+    escrowIds.forEach((escrowId) => {
+      subscribeToMilestoneUpdates(escrowId, (data) => {
+        try {
+          const fields = data.data || data;
+          const milestoneIndexField = fields.find(
+            (f: any) => f.name === "milestoneIndex"
+          );
+          const statusField = fields.find((f: any) => f.name === "status");
+
+          if (milestoneIndexField && statusField) {
+            const milestoneIndex = Number(milestoneIndexField.value);
+            const status = Number(statusField.value);
+
+            // Status 2 = approved (based on MilestoneStatus enum)
+            if (status === 2) {
+              console.log(
+                "📊 Milestone approved event received via Somnia Data Streams:",
+                {
+                  escrowId,
+                  milestoneIndex,
+                }
+              );
+
+              // Update UI reactively when milestone is approved
+              setEscrows((prevEscrows) =>
+                prevEscrows.map((e) => {
+                  if (e.id === escrowId) {
+                    const updatedMilestones = [...e.milestones];
+                    if (updatedMilestones[milestoneIndex]) {
+                      updatedMilestones[milestoneIndex] = {
+                        ...updatedMilestones[milestoneIndex],
+                        status: "approved" as const,
+                        approvedAt: Date.now(),
+                      };
+                    }
+
+                    // Update released amount
+                    const milestoneAmount = Number.parseFloat(
+                      updatedMilestones[milestoneIndex]?.amount || "0"
+                    );
+                    const newReleasedAmount =
+                      Number.parseFloat(e.releasedAmount) + milestoneAmount;
+
+                    // Check if all milestones are approved
+                    const allApproved = updatedMilestones.every(
+                      (m) => m.status === "approved"
+                    );
+
+                    return {
+                      ...e,
+                      milestones: updatedMilestones,
+                      releasedAmount: newReleasedAmount.toString(),
+                      status: allApproved ? "completed" : e.status,
+                    };
+                  }
+                  return e;
+                })
+              );
+
+              // Refresh from blockchain in background to ensure accuracy
+              fetchUserEscrows().catch(console.error);
+            }
+          }
+        } catch (error) {
+          console.error("Error processing milestone update:", error);
+        }
+      })
+        .then((unsubscribe) => {
+          if (unsubscribe) unsubscribeFunctions.push(unsubscribe);
+        })
+        .catch(console.error);
+    });
+
+    // Cleanup subscriptions on unmount or when escrow IDs change
+    return () => {
+      unsubscribeFunctions.forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error("Error unsubscribing:", error);
+        }
+      });
+    };
+  }, [
+    wallet.isConnected,
+    escrows.map((e) => e.id).join(","),
+    subscribeToMilestoneUpdates,
+  ]);
+
   const fetchUserEscrows = async () => {
     if (!isRefreshing) {
       setLoading(true);
@@ -1163,6 +1269,7 @@ export default function DashboardPage() {
       }
 
       if (receipt.status === "0x1") {
+        // Transaction confirmed - now show success toast
         toast({
           title: "Milestone Approved!",
           description: "Payment has been sent to the freelancer",
@@ -1182,25 +1289,46 @@ export default function DashboardPage() {
           freelancerAddress // Freelancer address
         );
 
-        // Wait a moment for blockchain state to update
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        // Optimistically update UI immediately
+        setEscrows((prevEscrows) =>
+          prevEscrows.map((e) => {
+            if (e.id === escrowId) {
+              const updatedMilestones = [...e.milestones];
+              if (updatedMilestones[milestoneIndex]) {
+                updatedMilestones[milestoneIndex] = {
+                  ...updatedMilestones[milestoneIndex],
+                  status: "approved" as const,
+                  approvedAt: Date.now(),
+                };
+              }
 
-        // Add debugging for payment tracking
-        const milestone = escrow.milestones[milestoneIndex];
+              // Update released amount
+              const milestoneAmount = Number.parseFloat(
+                updatedMilestones[milestoneIndex]?.amount || "0"
+              );
+              const newReleasedAmount =
+                Number.parseFloat(e.releasedAmount) + milestoneAmount;
 
-        // Check if milestone amount is being parsed correctly
-        const milestoneAmountInTokens =
-          Number.parseFloat(milestone.amount) / 1e18;
+              // Check if all milestones are approved (escrow completed)
+              const allApproved = updatedMilestones.every(
+                (m) => m.status === "approved"
+              );
 
-        await fetchUserEscrows();
+              return {
+                ...e,
+                milestones: updatedMilestones,
+                releasedAmount: newReleasedAmount.toString(),
+                status: allApproved ? "completed" : e.status,
+              };
+            }
+            return e;
+          })
+        );
 
-        // Dispatch event to notify other components
-        window.dispatchEvent(new CustomEvent("milestoneApproved"));
-
-        // Reload the page to ensure UI is fully updated
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
+        // Refresh from blockchain in background (non-blocking)
+        fetchUserEscrows().catch((error) => {
+          console.error("Error refreshing escrows:", error);
+        });
       } else {
         throw new Error("Transaction failed on blockchain");
       }

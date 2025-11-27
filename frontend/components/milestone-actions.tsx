@@ -418,6 +418,7 @@ export function MilestoneActions({
               }
 
               if (receipt.status === 1) {
+                // Transaction confirmed - now show success toast
                 toast({
                   title: "Milestone approved!",
                   description: "Payment has been released to the beneficiary",
@@ -437,61 +438,60 @@ export function MilestoneActions({
                 // Close the modal immediately after successful approval
                 setDialogOpen(false);
 
-                // Wait longer for blockchain state to fully update
-                await new Promise((resolve) => setTimeout(resolve, 5000));
-
-                // Dispatch event to notify freelancer dashboard of approval
+                // Dispatch event to notify other components
                 window.dispatchEvent(
                   new CustomEvent("milestoneApproved", {
                     detail: { escrowId, milestoneIndex },
                   })
                 );
 
-                // Call onSuccess to refresh data first
+                // Call onSuccess to refresh data (no page reload needed)
                 onSuccess();
-
-                // Wait a bit more for data to refresh, then reload page
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                // Reload the page to reflect the updated state
-                window.location.reload();
-
-                // Reload the page to reflect the updated state
-                window.location.reload();
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
             } catch (receiptError: any) {
-              // If confirmation fails but we have a transaction hash, assume success
-              // This handles cases where the transaction succeeds but confirmation polling fails
+              // If confirmation fails but we have a transaction hash, wait a bit and check again
               if (txHash) {
-                toast({
-                  title: "Milestone approved!",
-                  description: "Payment has been released to the beneficiary",
-                });
+                // Try polling one more time
+                try {
+                  const finalReceipt = await pollTransactionReceipt(txHash);
+                  if (finalReceipt && finalReceipt.status === 1) {
+                    toast({
+                      title: "Milestone approved!",
+                      description:
+                        "Payment has been released to the beneficiary",
+                    });
 
-                // Close the modal immediately after successful approval
-                setDialogOpen(false);
+                    // Add cross-wallet notification
+                    addCrossWalletNotification(
+                      createMilestoneNotification(
+                        "approved",
+                        escrowId,
+                        milestoneIndex
+                      ),
+                      payerAddress,
+                      beneficiaryAddress
+                    );
 
-                // Wait longer for blockchain state to fully update
-                await new Promise((resolve) => setTimeout(resolve, 5000));
+                    // Close the modal
+                    setDialogOpen(false);
 
-                // Dispatch event to notify freelancer dashboard of approval
-                window.dispatchEvent(
-                  new CustomEvent("milestoneApproved", {
-                    detail: { escrowId, milestoneIndex },
-                  })
-                );
+                    // Dispatch event to notify other components
+                    window.dispatchEvent(
+                      new CustomEvent("milestoneApproved", {
+                        detail: { escrowId, milestoneIndex },
+                      })
+                    );
 
-                // Call onSuccess to refresh data first
-                onSuccess();
-
-                // Wait a bit more for data to refresh, then reload page
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                // Reload the page to reflect the updated state
-                window.location.reload();
-                return;
+                    // Call onSuccess to refresh data (no page reload needed)
+                    onSuccess();
+                    return;
+                  }
+                } catch (finalError) {
+                  // If final check also fails, show error but don't reload
+                  console.error("Final receipt check failed:", finalError);
+                }
               }
 
               if (receiptError.message?.includes("timeout")) {
@@ -634,31 +634,27 @@ export function MilestoneActions({
 
                 setDialogOpen(false);
                 onSuccess();
-
-                // Wait a bit for data to refresh, then reload page
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                // Reload the page to reflect the updated state
-                window.location.reload();
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
             } catch (receiptError: any) {
               if (txHash) {
-                toast({
-                  title: "Milestone rejected!",
-                  description:
-                    "The milestone has been rejected and the freelancer can resubmit",
-                });
-                setDialogOpen(false);
-                onSuccess();
-
-                // Wait a bit for data to refresh, then reload page
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                // Reload the page to reflect the updated state
-                window.location.reload();
-                return;
+                // Try polling one more time for receipt
+                try {
+                  const finalReceipt = await pollTransactionReceipt(txHash);
+                  if (finalReceipt && finalReceipt.status === 1) {
+                    toast({
+                      title: "Milestone rejected!",
+                      description:
+                        "The milestone has been rejected and the freelancer can resubmit",
+                    });
+                    setDialogOpen(false);
+                    onSuccess();
+                    return;
+                  }
+                } catch (finalError) {
+                  console.error("Final receipt check failed:", finalError);
+                }
               }
               throw new Error("Transaction failed to confirm on blockchain");
             }
@@ -884,47 +880,38 @@ export function MilestoneActions({
 
                 // Call onSuccess to refresh data first
                 onSuccess();
-
-                // Wait a bit more for data to refresh, then reload page
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                // Reload the page to reflect the updated state
-                window.location.reload();
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
             } catch (receiptError: any) {
-              // If confirmation fails but we have a transaction hash, assume success
-              // This handles cases where the transaction succeeds but confirmation polling fails
+              // If confirmation fails but we have a transaction hash, try polling one more time
               if (txHash) {
-                toast({
-                  title: "Milestone disputed!",
-                  description:
-                    "The milestone has been disputed and will be reviewed by the admin",
-                });
+                try {
+                  const finalReceipt = await pollTransactionReceipt(txHash);
+                  if (finalReceipt && finalReceipt.status === 1) {
+                    toast({
+                      title: "Milestone disputed!",
+                      description:
+                        "The milestone has been disputed and will be reviewed by the admin",
+                    });
 
-                // Close the modal immediately after successful dispute
-                setDialogOpen(false);
+                    // Close the modal immediately after successful dispute
+                    setDialogOpen(false);
 
-                // Wait longer for blockchain state to fully update
-                await new Promise((resolve) => setTimeout(resolve, 5000));
+                    // Dispatch event to notify other components
+                    window.dispatchEvent(
+                      new CustomEvent("milestoneDisputed", {
+                        detail: { escrowId, milestoneIndex },
+                      })
+                    );
 
-                // Dispatch event to notify freelancer dashboard of dispute
-                window.dispatchEvent(
-                  new CustomEvent("milestoneDisputed", {
-                    detail: { escrowId, milestoneIndex },
-                  })
-                );
-
-                // Call onSuccess to refresh data first
-                onSuccess();
-
-                // Wait a bit more for data to refresh, then reload page
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                // Reload the page to reflect the updated state
-                window.location.reload();
-                return;
+                    // Call onSuccess to refresh data (no page reload needed)
+                    onSuccess();
+                    return;
+                  }
+                } catch (finalError) {
+                  console.error("Final receipt check failed:", finalError);
+                }
               }
 
               // Only show error if we don't have a transaction hash
