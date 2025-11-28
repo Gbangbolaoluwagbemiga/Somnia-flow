@@ -95,13 +95,26 @@ const decodeHexToString = (value?: string): string | null => {
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { wallet, getContract } = useWeb3();
-  const { subscribeToApplications } = useSomniaStreams();
+  const { subscribeToApplications, subscribeToEscrowStatus } =
+    useSomniaStreams();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [clientJobIds, setClientJobIds] = useState<string[]>([]);
   const [jobMetadata, setJobMetadata] = useState<Record<string, string>>({});
+  const [clientEscrowIds, setClientEscrowIds] = useState<string[]>([]);
+  const [escrowMetadata, setEscrowMetadata] = useState<
+    Record<
+      string,
+      {
+        title: string;
+        freelancer?: string;
+      }
+    >
+  >({});
   const processedApplicationIds = useRef<Set<string>>(new Set());
+  const processedEscrowStatusEvents = useRef<Set<string>>(new Set());
   const applicationSubscriptions = useRef<Record<string, () => void>>({});
+  const escrowStatusSubscriptions = useRef<Record<string, () => void>>({});
 
   // Load notifications from localStorage on mount and when wallet changes
   useEffect(() => {
@@ -141,7 +154,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [notifications, wallet.isConnected, wallet.address]);
 
-  // Fetch open job IDs (client-owned open jobs) for application subscriptions
+  // Fetch client-owned open job IDs for application notifications
   useEffect(() => {
     let isMounted = true;
 
@@ -198,6 +211,72 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     };
 
     fetchClientJobs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [wallet.isConnected, wallet.address, getContract]);
+
+  // Fetch all client-owned escrows (for status change notifications)
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchClientEscrows = async () => {
+      if (!wallet.isConnected || !wallet.address) {
+        if (isMounted) {
+          setClientEscrowIds([]);
+          setEscrowMetadata({});
+        }
+        return;
+      }
+
+      try {
+        const contract = getContract(
+          CONTRACTS.SECUREFLOW_ESCROW,
+          SECUREFLOW_ABI
+        );
+        if (!contract) return;
+
+        const totalEscrows = await contract.call("nextEscrowId");
+        const total = Number(totalEscrows);
+        const escrows: string[] = [];
+        const metadata: Record<string, { title: string; freelancer?: string }> =
+          {};
+        const lowerAddress = wallet.address.toLowerCase();
+
+        for (let id = 1; id < total; id++) {
+          try {
+            const summary = await contract.call("getEscrowSummary", id);
+            const payer = summary[0]?.toLowerCase?.();
+            if (payer === lowerAddress) {
+              const idStr = id.toString();
+              escrows.push(idStr);
+              metadata[idStr] = {
+                title: summary[13] || summary[14] || `Project #${idStr}`,
+                freelancer:
+                  summary[1] && summary[1] !== ZERO_ADDRESS
+                    ? summary[1]
+                    : undefined,
+              };
+            }
+          } catch (error) {
+            continue;
+          }
+        }
+
+        if (isMounted) {
+          setClientEscrowIds(escrows);
+          setEscrowMetadata(metadata);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setClientEscrowIds([]);
+          setEscrowMetadata({});
+        }
+      }
+    };
+
+    fetchClientEscrows();
 
     return () => {
       isMounted = false;
@@ -351,6 +430,127 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     subscribeToApplications,
     clientJobIds.join(","),
     JSON.stringify(jobMetadata),
+  ]);
+
+  // Subscribe to escrow status changes (e.g., work started) for client-owned escrows
+  useEffect(() => {
+    if (
+      !wallet.isConnected ||
+      !wallet.address ||
+      !subscribeToEscrowStatus ||
+      clientEscrowIds.length === 0
+    ) {
+      Object.values(escrowStatusSubscriptions.current).forEach(
+        (unsubscribe) => {
+          try {
+            unsubscribe();
+          } catch (error) {
+            console.error("Error unsubscribing from escrow status:", error);
+          }
+        }
+      );
+      escrowStatusSubscriptions.current = {};
+      processedEscrowStatusEvents.current.clear();
+      return;
+    }
+
+    const activeSubscriptions = escrowStatusSubscriptions.current;
+    const escrowIdSet = new Set(clientEscrowIds);
+
+    Object.keys(activeSubscriptions).forEach((escrowId) => {
+      if (!escrowIdSet.has(escrowId)) {
+        try {
+          activeSubscriptions[escrowId]?.();
+        } catch (error) {
+          console.error("Error unsubscribing from escrow status:", error);
+        }
+        delete activeSubscriptions[escrowId];
+      }
+    });
+
+    const createdUnsubscribes: Array<{ id: string; unsubscribe: () => void }> =
+      [];
+
+    clientEscrowIds.forEach((escrowId) => {
+      if (activeSubscriptions[escrowId]) {
+        return;
+      }
+
+      subscribeToEscrowStatus(escrowId, (data) => {
+        try {
+          const fields = data.data || data;
+          const newStatusField = fields.find(
+            (f: any) => f.name === "newStatus"
+          );
+          const timestampField = fields.find(
+            (f: any) => f.name === "timestamp"
+          );
+
+          const newStatus = Number(newStatusField?.value);
+          const eventKey = `${escrowId}-${newStatus}-${
+            timestampField?.value || Date.now()
+          }`;
+
+          if (processedEscrowStatusEvents.current.has(eventKey)) {
+            return;
+          }
+          processedEscrowStatusEvents.current.add(eventKey);
+
+          if (newStatus === 1) {
+            const metadata = escrowMetadata[escrowId] || {
+              title: `Project #${escrowId}`,
+            };
+            const freelancerName = metadata.freelancer
+              ? formatAddress(metadata.freelancer)
+              : "Freelancer";
+
+            addNotification(
+              createEscrowNotification("work_started", escrowId, {
+                projectTitle: metadata.title,
+                freelancerName,
+              })
+            );
+
+            toast({
+              title: "Freelancer Started Work",
+              description: `${freelancerName} has started work on ${metadata.title}`,
+            });
+          }
+        } catch (error) {
+          console.error("Error processing escrow status update:", error);
+        }
+      })
+        .then((unsubscribe) => {
+          if (unsubscribe) {
+            activeSubscriptions[escrowId] = unsubscribe;
+            createdUnsubscribes.push({ id: escrowId, unsubscribe });
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Error subscribing to escrow status for escrow:",
+            escrowId,
+            error
+          );
+        });
+    });
+
+    return () => {
+      createdUnsubscribes.forEach(({ id, unsubscribe }) => {
+        try {
+          unsubscribe();
+          delete activeSubscriptions[id];
+        } catch (error) {
+          console.error("Error unsubscribing from escrow status:", error);
+        }
+      });
+    };
+  }, [
+    wallet.isConnected,
+    wallet.address,
+    subscribeToEscrowStatus,
+    clientEscrowIds.join(","),
+    JSON.stringify(escrowMetadata),
   ]);
 
   const addNotification = (
