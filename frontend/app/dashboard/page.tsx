@@ -1525,19 +1525,49 @@ export default function DashboardPage() {
           })
         );
 
-        // Show success toast
+        // Show success toast with indexer wait message
         toast({
           title: "Milestone Approved!",
-          description: "Payment has been sent to the freelancer",
+          description: "Payment sent. Waiting for indexer to process event...",
         });
 
         // Close modal by clearing submitting state
         setSubmittingMilestone(null);
 
-        // Refresh from blockchain in background (non-blocking)
-        fetchUserEscrows().catch((error) => {
-          console.error("Error refreshing escrows:", error);
-        });
+        // Wait for Somnia indexer to process the event
+        // Use multiple refresh attempts to ensure we catch the update
+        let refreshAttempts = 0;
+        const maxRefreshAttempts = 3;
+        const refreshInterval = 3000; // 3 seconds between attempts
+
+        const attemptRefresh = async () => {
+          refreshAttempts++;
+          try {
+            await fetchUserEscrows();
+            
+            if (refreshAttempts === 1) {
+              toast({
+                title: "Indexer Processing",
+                description: `Refresh ${refreshAttempts}/${maxRefreshAttempts} - Checking for updates...`,
+              });
+            } else if (refreshAttempts === maxRefreshAttempts) {
+              toast({
+                title: "Dashboard Updated",
+                description: "Milestone status has been refreshed from blockchain",
+              });
+            }
+          } catch (error) {
+            console.error(`Error refreshing escrows (attempt ${refreshAttempts}):`, error);
+          }
+
+          // Schedule next refresh if not at max attempts
+          if (refreshAttempts < maxRefreshAttempts) {
+            setTimeout(attemptRefresh, refreshInterval);
+          }
+        };
+
+        // Start the refresh cycle after initial delay for indexer
+        setTimeout(attemptRefresh, 3000); // Initial 3 second delay
       } else {
         // No receipt yet, but we have a txHash - transaction is pending
         // Don't show error - wait for Somnia Data Streams to detect the event
@@ -1674,10 +1704,40 @@ export default function DashboardPage() {
           })
         );
 
-        // Refresh from blockchain in background (non-blocking)
-        fetchUserEscrows().catch((error) => {
-          console.error("Error refreshing escrows:", error);
-        });
+        // Wait for Somnia indexer to process the event
+        // Use multiple refresh attempts to ensure we catch the update
+        let refreshAttempts = 0;
+        const maxRefreshAttempts = 3;
+        const refreshInterval = 3000; // 3 seconds between attempts
+
+        const attemptRefresh = async () => {
+          refreshAttempts++;
+          try {
+            await fetchUserEscrows();
+            
+            if (refreshAttempts === 1) {
+              toast({
+                title: "Indexer Processing",
+                description: `Refresh ${refreshAttempts}/${maxRefreshAttempts} - Checking for updates...`,
+              });
+            } else if (refreshAttempts === maxRefreshAttempts) {
+              toast({
+                title: "Dashboard Updated",
+                description: "Milestone status has been refreshed from blockchain",
+              });
+            }
+          } catch (error) {
+            console.error(`Error refreshing escrows (attempt ${refreshAttempts}):`, error);
+          }
+
+          // Schedule next refresh if not at max attempts
+          if (refreshAttempts < maxRefreshAttempts) {
+            setTimeout(attemptRefresh, refreshInterval);
+          }
+        };
+
+        // Start the refresh cycle after initial delay for indexer
+        setTimeout(attemptRefresh, 3000); // Initial 3 second delay
       } else {
         throw new Error("Transaction failed on blockchain");
       }

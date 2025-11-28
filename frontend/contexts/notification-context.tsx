@@ -253,7 +253,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         const totalEscrows = await contract.call("nextEscrowId");
         const total = Number(totalEscrows);
         const escrows: string[] = [];
-        const metadata: Record<string, { title: string; freelancer?: string }> =
+        const metadata: Record<string, { title: string; client?: string; freelancer?: string }> =
           {};
         const lowerAddress = wallet.address.toLowerCase();
 
@@ -266,6 +266,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               escrows.push(idStr);
               metadata[idStr] = {
                 title: summary[13] || summary[14] || `Project #${idStr}`,
+                client: payer,
                 freelancer:
                   summary[1] && summary[1] !== ZERO_ADDRESS
                     ? summary[1]
@@ -700,19 +701,26 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const freelancerName = freelancerAddress
             ? formatAddress(freelancerAddress)
             : "Freelancer";
+          const clientAddress = metadata.client;
 
-          addNotification(
-            createMilestoneNotification("submitted", escrowId, milestoneIndex),
-            [wallet.address!], // Notify only the client
-            false
-          );
+          // Only notify the client, not the freelancer who submitted
+          if (clientAddress && clientAddress.toLowerCase() !== freelancerAddress.toLowerCase()) {
+            addNotification(
+              createMilestoneNotification("submitted", escrowId, milestoneIndex, {
+                projectTitle: metadata.title,
+                freelancerName,
+              }),
+              [clientAddress],
+              true // Skip current user (freelancer)
+            );
 
-          toast({
-            title: "Milestone Submitted",
-            description: `${freelancerName} submitted milestone ${
-              milestoneIndex + 1
-            } for ${metadata.title}`,
-          });
+            toast({
+              title: "Milestone Submitted",
+              description: `${freelancerName} submitted milestone ${
+                milestoneIndex + 1
+              } for ${metadata.title}`,
+            });
+          }
         } catch (error) {
           console.error("Error processing milestone submission event:", error);
         }
@@ -807,19 +815,26 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const metadata = escrowMetadata[escrowId] || {
             title: `Project #${escrowId}`,
           };
+          const freelancerAddress = metadata.freelancer;
+          const clientAddress = metadata.client;
 
-          addNotification(
-            createMilestoneNotification("approved", escrowId, milestoneIndex),
-            [wallet.address!], // Notify only the freelancer
-            false
-          );
+          // Only notify the freelancer, not the client who approved
+          if (freelancerAddress && clientAddress && freelancerAddress.toLowerCase() !== clientAddress.toLowerCase()) {
+            addNotification(
+              createMilestoneNotification("approved", escrowId, milestoneIndex, {
+                projectTitle: metadata.title,
+              }),
+              [freelancerAddress],
+              true // Skip current user (client)
+            );
 
-          toast({
-            title: "Milestone Approved!",
-            description: `Milestone ${milestoneIndex + 1} approved for ${
-              metadata.title
-            }`,
-          });
+            toast({
+              title: "Milestone Approved!",
+              description: `Milestone ${milestoneIndex + 1} approved for ${
+                metadata.title
+              }`,
+            });
+          }
         } catch (error) {
           console.error("Error processing milestone approval event:", error);
         }
@@ -915,22 +930,28 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const metadata = escrowMetadata[escrowId] || {
             title: `Project #${escrowId}`,
           };
+          const freelancerAddress = metadata.freelancer;
+          const clientAddress = metadata.client;
 
-          addNotification(
-            createMilestoneNotification("rejected", escrowId, milestoneIndex, {
-              reason,
-            }),
-            [wallet.address!], // Notify only the freelancer
-            false
-          );
+          // Only notify the freelancer, not the client who rejected
+          if (freelancerAddress && clientAddress && freelancerAddress.toLowerCase() !== clientAddress.toLowerCase()) {
+            addNotification(
+              createMilestoneNotification("rejected", escrowId, milestoneIndex, {
+                reason,
+                projectTitle: metadata.title,
+              }),
+              [freelancerAddress],
+              true // Skip current user (client)
+            );
 
-          toast({
-            title: "Milestone Rejected",
-            description: `Milestone ${milestoneIndex + 1} rejected for ${
-              metadata.title
-            }`,
-            variant: "destructive",
-          });
+            toast({
+              title: "Milestone Rejected",
+              description: `Milestone ${milestoneIndex + 1} rejected for ${
+                metadata.title
+              }`,
+              variant: "destructive",
+            });
+          }
         } catch (error) {
           console.error("Error processing milestone rejection event:", error);
         }

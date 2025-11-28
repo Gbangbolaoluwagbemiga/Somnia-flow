@@ -44,11 +44,11 @@ export function initSomniaSDKPublic(rpcUrl?: string): SDK {
   publicClientInstance = createPublicClient({
     chain: somniaTestnet,
     transport: http(rpc),
-  });
+  }) as ReturnType<typeof createPublicClient>;
 
   sdkInstance = new SDK({
     public: publicClientInstance,
-  });
+  } as any);
 
   return sdkInstance;
 }
@@ -78,7 +78,7 @@ export function initSomniaSDKWithWallet(
   sdkInstance = new SDK({
     public: publicClientInstance,
     wallet: walletClientInstance,
-  });
+  } as any);
 
   return sdkInstance;
 }
@@ -127,27 +127,27 @@ export async function registerSecureFlowSchemas(
     {
       schemaName: SCHEMA_NAMES.JOB_POSTING,
       schema: JOB_POSTING_SCHEMA,
-      parentSchemaId: zeroBytes32,
+      parentSchemaId: zeroBytes32 as Hex,
     },
     {
       schemaName: SCHEMA_NAMES.MILESTONE_UPDATE,
       schema: MILESTONE_UPDATE_SCHEMA,
-      parentSchemaId: zeroBytes32,
+      parentSchemaId: zeroBytes32 as Hex,
     },
     {
       schemaName: SCHEMA_NAMES.ESCROW_STATUS,
       schema: ESCROW_STATUS_SCHEMA,
-      parentSchemaId: zeroBytes32,
+      parentSchemaId: zeroBytes32 as Hex,
     },
     {
       schemaName: SCHEMA_NAMES.APPLICATION,
       schema: APPLICATION_SCHEMA,
-      parentSchemaId: zeroBytes32,
+      parentSchemaId: zeroBytes32 as Hex,
     },
     {
       schemaName: SCHEMA_NAMES.DISPUTE,
       schema: DISPUTE_SCHEMA,
-      parentSchemaId: zeroBytes32,
+      parentSchemaId: zeroBytes32 as Hex,
     },
   ];
 
