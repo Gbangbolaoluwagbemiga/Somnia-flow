@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSomniaStreams } from "./somnia-streams-context";
 import { CONTRACTS } from "@/lib/web3/config";
 import { SECUREFLOW_ABI } from "@/lib/web3/abis";
+import { hexToString } from "viem";
 
 export interface Notification {
   id: string;
@@ -78,6 +79,18 @@ const normalizeIdValue = (value: any): string | null => {
     }
   }
   return null;
+};
+
+const decodeHexToString = (value?: string): string | null => {
+  if (!value || typeof value !== "string" || !value.startsWith("0x")) {
+    return null;
+  }
+  try {
+    const decoded = hexToString(value as `0x${string}`).replace(/\0+$/, "");
+    return decoded || null;
+  } catch {
+    return null;
+  }
 };
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
@@ -245,6 +258,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const coverLetterField = fields.find(
             (f: any) => f.name === "coverLetter"
           );
+          const jobIdField = fields.find((f: any) => f.name === "jobId");
+          if (!jobIdField) {
+            return;
+          }
 
           const applicationId = normalizeIdValue(applicationIdField?.value);
 
@@ -263,6 +280,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             (applicantField?.value || applicantField)?.toString() || "";
 
           if (!applicantAddress) {
+            return;
+          }
+
+          const eventJobId =
+            normalizeIdValue(jobIdField?.value) ||
+            decodeHexToString(jobIdField?.value) ||
+            jobIdField?.value?.toString();
+
+          if (
+            !eventJobId ||
+            (eventJobId !== jobId &&
+              eventJobId !== jobId.toString() &&
+              eventJobId.replace(/^0+/, "") !== jobId.replace(/^0+/, ""))
+          ) {
             return;
           }
 
