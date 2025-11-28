@@ -43,8 +43,13 @@ export const SCHEMA_NAMES = {
 export const EVENT_SCHEMA_IDS = {
   JOB_POSTED: "JobPosted",
   MILESTONE_UPDATED: "MilestoneUpdated",
+  MILESTONE_SUBMITTED: "MilestoneSubmitted",
+  MILESTONE_APPROVED: "MilestoneApproved",
+  MILESTONE_REJECTED: "MilestoneRejected",
+  MILESTONE_RESUBMITTED: "MilestoneResubmitted",
   ESCROW_STATUS_CHANGED: "EscrowStatusChanged",
   APPLICATION_SUBMITTED: "ApplicationSubmitted",
   DISPUTE_CREATED: "DisputeCreated",
   FREELANCER_RATED: "FreelancerRated",
 } as const;
+

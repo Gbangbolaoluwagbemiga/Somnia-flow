@@ -95,26 +95,39 @@ const decodeHexToString = (value?: string): string | null => {
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { wallet, getContract } = useWeb3();
-  const { subscribeToApplications, subscribeToEscrowStatus } =
-    useSomniaStreams();
+  const {
+    subscribeToApplications,
+    subscribeToEscrowStatus,
+    subscribeToMilestoneSubmissions,
+    subscribeToMilestoneApprovals,
+    subscribeToMilestoneRejections,
+  } = useSomniaStreams();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [clientJobIds, setClientJobIds] = useState<string[]>([]);
   const [jobMetadata, setJobMetadata] = useState<Record<string, string>>({});
   const [clientEscrowIds, setClientEscrowIds] = useState<string[]>([]);
+  const [freelancerEscrowIds, setFreelancerEscrowIds] = useState<string[]>([]);
   const [escrowMetadata, setEscrowMetadata] = useState<
     Record<
       string,
       {
         title: string;
         freelancer?: string;
+        client?: string;
       }
     >
   >({});
   const processedApplicationIds = useRef<Set<string>>(new Set());
   const processedEscrowStatusEvents = useRef<Set<string>>(new Set());
+  const processedMilestoneSubmissions = useRef<Set<string>>(new Set());
+  const processedMilestoneApprovals = useRef<Set<string>>(new Set());
+  const processedMilestoneRejections = useRef<Set<string>>(new Set());
   const applicationSubscriptions = useRef<Record<string, () => void>>({});
   const escrowStatusSubscriptions = useRef<Record<string, () => void>>({});
+  const milestoneSubmissionSubscriptions = useRef<Record<string, () => void>>({});
+  const milestoneApprovalSubscriptions = useRef<Record<string, () => void>>({});
+  const milestoneRejectionSubscriptions = useRef<Record<string, () => void>>({});
 
   // Load notifications from localStorage on mount and when wallet changes
   useEffect(() => {
@@ -550,6 +563,400 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     wallet.address,
     subscribeToEscrowStatus,
     clientEscrowIds.join(","),
+    JSON.stringify(escrowMetadata),
+  ]);
+
+  // Fetch freelancer-owned escrows (for milestone approval/rejection notifications)
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchFreelancerEscrows = async () => {
+      if (!wallet.isConnected || !wallet.address) {
+        if (isMounted) {
+          setFreelancerEscrowIds([]);
+        }
+        return;
+      }
+
+      try {
+        const contract = getContract(
+          CONTRACTS.SECUREFLOW_ESCROW,
+          SECUREFLOW_ABI
+        );
+        if (!contract) return;
+
+        const totalEscrows = await contract.call("nextEscrowId");
+        const total = Number(totalEscrows);
+        const escrows: string[] = [];
+        const metadata: Record<string, { title: string; client?: string }> = {};
+        const lowerAddress = wallet.address.toLowerCase();
+
+        for (let id = 1; id < total; id++) {
+          try {
+            const summary = await contract.call("getEscrowSummary", id);
+            const beneficiary = summary[1]?.toLowerCase?.();
+            if (beneficiary === lowerAddress) {
+              const idStr = id.toString();
+              escrows.push(idStr);
+              metadata[idStr] = {
+                title: summary[13] || summary[14] || `Project #${idStr}`,
+                client: summary[0], // payer address
+              };
+            }
+          } catch (error) {
+            continue;
+          }
+        }
+
+        if (isMounted) {
+          setFreelancerEscrowIds(escrows);
+          // Merge with existing metadata
+          setEscrowMetadata((prev) => ({ ...prev, ...metadata }));
+        }
+      } catch (error) {
+        if (isMounted) {
+          setFreelancerEscrowIds([]);
+        }
+      }
+    };
+
+    fetchFreelancerEscrows();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [wallet.isConnected, wallet.address, getContract]);
+
+  // Subscribe to milestone submissions for client-owned escrows
+  useEffect(() => {
+    if (
+      !wallet.isConnected ||
+      !wallet.address ||
+      !subscribeToMilestoneSubmissions ||
+      clientEscrowIds.length === 0
+    ) {
+      Object.values(milestoneSubmissionSubscriptions.current).forEach(
+        (unsubscribe) => {
+          try {
+            unsubscribe();
+          } catch (error) {
+            console.error("Error unsubscribing from milestone submissions:", error);
+          }
+        }
+      );
+      milestoneSubmissionSubscriptions.current = {};
+      processedMilestoneSubmissions.current.clear();
+      return;
+    }
+
+    const activeSubscriptions = milestoneSubmissionSubscriptions.current;
+    const escrowIdSet = new Set(clientEscrowIds);
+
+    // Unsubscribe from escrows no longer relevant
+    Object.keys(activeSubscriptions).forEach((escrowId) => {
+      if (!escrowIdSet.has(escrowId)) {
+        try {
+          activeSubscriptions[escrowId]?.();
+        } catch (error) {
+          console.error("Error unsubscribing from escrow:", escrowId, error);
+        }
+        delete activeSubscriptions[escrowId];
+      }
+    });
+
+    // Subscribe to new escrow IDs
+    clientEscrowIds.forEach((escrowId) => {
+      if (activeSubscriptions[escrowId]) {
+        return;
+      }
+
+      subscribeToMilestoneSubmissions(escrowId, (data) => {
+        try {
+          const fields = data.data || data;
+          const milestoneIndexField = fields.find(
+            (f: any) => f.name === "milestoneIndex"
+          );
+          const beneficiaryField = fields.find(
+            (f: any) => f.name === "beneficiary"
+          );
+          const timestampField = fields.find(
+            (f: any) => f.name === "submittedAt"
+          );
+
+          const milestoneIndex = Number(milestoneIndexField?.value || 0);
+          const eventKey = `${escrowId}-${milestoneIndex}-${
+            timestampField?.value || Date.now()
+          }`;
+
+          if (processedMilestoneSubmissions.current.has(eventKey)) {
+            return;
+          }
+          processedMilestoneSubmissions.current.add(eventKey);
+
+          const metadata = escrowMetadata[escrowId] || {
+            title: `Project #${escrowId}`,
+          };
+          const freelancerAddress = beneficiaryField?.value?.toString() || "";
+          const freelancerName = freelancerAddress
+            ? formatAddress(freelancerAddress)
+            : "Freelancer";
+
+          addNotification(
+            createMilestoneNotification("submitted", escrowId, milestoneIndex),
+            [wallet.address!], // Notify only the client
+            false
+          );
+
+          toast({
+            title: "Milestone Submitted",
+            description: `${freelancerName} submitted milestone ${
+              milestoneIndex + 1
+            } for ${metadata.title}`,
+          });
+        } catch (error) {
+          console.error("Error processing milestone submission event:", error);
+        }
+      })
+        .then((unsubscribe) => {
+          if (unsubscribe) {
+            activeSubscriptions[escrowId] = unsubscribe;
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Error subscribing to milestone submissions for escrow:",
+            escrowId,
+            error
+          );
+        });
+    });
+
+    return () => {
+      // Cleanup handled separately when dependencies change
+    };
+  }, [
+    wallet.isConnected,
+    wallet.address,
+    subscribeToMilestoneSubmissions,
+    clientEscrowIds.join(","),
+    JSON.stringify(escrowMetadata),
+  ]);
+
+  // Subscribe to milestone approvals for freelancer-owned escrows
+  useEffect(() => {
+    if (
+      !wallet.isConnected ||
+      !wallet.address ||
+      !subscribeToMilestoneApprovals ||
+      freelancerEscrowIds.length === 0
+    ) {
+      Object.values(milestoneApprovalSubscriptions.current).forEach(
+        (unsubscribe) => {
+          try {
+            unsubscribe();
+          } catch (error) {
+            console.error("Error unsubscribing from milestone approvals:", error);
+          }
+        }
+      );
+      milestoneApprovalSubscriptions.current = {};
+      processedMilestoneApprovals.current.clear();
+      return;
+    }
+
+    const activeSubscriptions = milestoneApprovalSubscriptions.current;
+    const escrowIdSet = new Set(freelancerEscrowIds);
+
+    Object.keys(activeSubscriptions).forEach((escrowId) => {
+      if (!escrowIdSet.has(escrowId)) {
+        try {
+          activeSubscriptions[escrowId]?.();
+        } catch (error) {
+          console.error("Error unsubscribing from escrow:", escrowId, error);
+        }
+        delete activeSubscriptions[escrowId];
+      }
+    });
+
+    freelancerEscrowIds.forEach((escrowId) => {
+      if (activeSubscriptions[escrowId]) {
+        return;
+      }
+
+      subscribeToMilestoneApprovals(escrowId, (data) => {
+        try {
+          const fields = data.data || data;
+          const milestoneIndexField = fields.find(
+            (f: any) => f.name === "milestoneIndex"
+          );
+          const amountField = fields.find((f: any) => f.name === "amount");
+          const timestampField = fields.find(
+            (f: any) => f.name === "approvedAt"
+          );
+
+          const milestoneIndex = Number(milestoneIndexField?.value || 0);
+          const eventKey = `${escrowId}-${milestoneIndex}-${
+            timestampField?.value || Date.now()
+          }`;
+
+          if (processedMilestoneApprovals.current.has(eventKey)) {
+            return;
+          }
+          processedMilestoneApprovals.current.add(eventKey);
+
+          const metadata = escrowMetadata[escrowId] || {
+            title: `Project #${escrowId}`,
+          };
+
+          addNotification(
+            createMilestoneNotification("approved", escrowId, milestoneIndex),
+            [wallet.address!], // Notify only the freelancer
+            false
+          );
+
+          toast({
+            title: "Milestone Approved!",
+            description: `Milestone ${milestoneIndex + 1} approved for ${
+              metadata.title
+            }`,
+          });
+        } catch (error) {
+          console.error("Error processing milestone approval event:", error);
+        }
+      })
+        .then((unsubscribe) => {
+          if (unsubscribe) {
+            activeSubscriptions[escrowId] = unsubscribe;
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Error subscribing to milestone approvals for escrow:",
+            escrowId,
+            error
+          );
+        });
+    });
+
+    return () => {
+      // Cleanup handled separately
+    };
+  }, [
+    wallet.isConnected,
+    wallet.address,
+    subscribeToMilestoneApprovals,
+    freelancerEscrowIds.join(","),
+    JSON.stringify(escrowMetadata),
+  ]);
+
+  // Subscribe to milestone rejections for freelancer-owned escrows
+  useEffect(() => {
+    if (
+      !wallet.isConnected ||
+      !wallet.address ||
+      !subscribeToMilestoneRejections ||
+      freelancerEscrowIds.length === 0
+    ) {
+      Object.values(milestoneRejectionSubscriptions.current).forEach(
+        (unsubscribe) => {
+          try {
+            unsubscribe();
+          } catch (error) {
+            console.error("Error unsubscribing from milestone rejections:", error);
+          }
+        }
+      );
+      milestoneRejectionSubscriptions.current = {};
+      processedMilestoneRejections.current.clear();
+      return;
+    }
+
+    const activeSubscriptions = milestoneRejectionSubscriptions.current;
+    const escrowIdSet = new Set(freelancerEscrowIds);
+
+    Object.keys(activeSubscriptions).forEach((escrowId) => {
+      if (!escrowIdSet.has(escrowId)) {
+        try {
+          activeSubscriptions[escrowId]?.();
+        } catch (error) {
+          console.error("Error unsubscribing from escrow:", escrowId, error);
+        }
+        delete activeSubscriptions[escrowId];
+      }
+    });
+
+    freelancerEscrowIds.forEach((escrowId) => {
+      if (activeSubscriptions[escrowId]) {
+        return;
+      }
+
+      subscribeToMilestoneRejections(escrowId, (data) => {
+        try {
+          const fields = data.data || data;
+          const milestoneIndexField = fields.find(
+            (f: any) => f.name === "milestoneIndex"
+          );
+          const reasonField = fields.find((f: any) => f.name === "reason");
+          const timestampField = fields.find(
+            (f: any) => f.name === "rejectedAt"
+          );
+
+          const milestoneIndex = Number(milestoneIndexField?.value || 0);
+          const reason = reasonField?.value?.toString() || "No reason provided";
+          const eventKey = `${escrowId}-${milestoneIndex}-${
+            timestampField?.value || Date.now()
+          }`;
+
+          if (processedMilestoneRejections.current.has(eventKey)) {
+            return;
+          }
+          processedMilestoneRejections.current.add(eventKey);
+
+          const metadata = escrowMetadata[escrowId] || {
+            title: `Project #${escrowId}`,
+          };
+
+          addNotification(
+            createMilestoneNotification("rejected", escrowId, milestoneIndex, {
+              reason,
+            }),
+            [wallet.address!], // Notify only the freelancer
+            false
+          );
+
+          toast({
+            title: "Milestone Rejected",
+            description: `Milestone ${milestoneIndex + 1} rejected for ${
+              metadata.title
+            }`,
+            variant: "destructive",
+          });
+        } catch (error) {
+          console.error("Error processing milestone rejection event:", error);
+        }
+      })
+        .then((unsubscribe) => {
+          if (unsubscribe) {
+            activeSubscriptions[escrowId] = unsubscribe;
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Error subscribing to milestone rejections for escrow:",
+            escrowId,
+            error
+          );
+        });
+    });
+
+    return () => {
+      // Cleanup handled separately
+    };
+  }, [
+    wallet.isConnected,
+    wallet.address,
+    subscribeToMilestoneRejections,
+    freelancerEscrowIds.join(","),
     JSON.stringify(escrowMetadata),
   ]);
 

@@ -1163,6 +1163,8 @@ export default function DashboardPage() {
       submitted: { variant: "default", label: "Submitted" },
       approved: { variant: "outline", label: "Approved" },
       disputed: { variant: "destructive", label: "Disputed" },
+      rejected: { variant: "destructive", label: "Rejected" },
+      resolved: { variant: "secondary", label: "Resolved" },
     };
 
     const config = variants[status] || variants.pending;

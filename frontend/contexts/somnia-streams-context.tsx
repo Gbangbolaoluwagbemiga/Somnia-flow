@@ -30,6 +30,18 @@ interface SomniaStreamsContextType {
     escrowId: string,
     onData: (data: any) => void
   ) => Promise<() => void>;
+  subscribeToMilestoneSubmissions: (
+    escrowId: string,
+    onData: (data: any) => void
+  ) => Promise<() => void>;
+  subscribeToMilestoneApprovals: (
+    escrowId: string,
+    onData: (data: any) => void
+  ) => Promise<() => void>;
+  subscribeToMilestoneRejections: (
+    escrowId: string,
+    onData: (data: any) => void
+  ) => Promise<() => void>;
   subscribeToEscrowStatus: (
     escrowId: string,
     onData: (data: any) => void
@@ -66,8 +78,9 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
       try {
         // Check if connected to Somnia network
         const chainId = wallet.chainId;
+        const chainIdStr = chainId?.toString();
         const isSomniaNetwork =
-          chainId === 50312 || chainId === "0xC4A8" || chainId === "50312";
+          chainId === 50312 || chainIdStr === "0xC4A8" || chainIdStr === "50312";
 
         if (isSomniaNetwork || !wallet.isConnected) {
           // Initialize with public client for reading/subscribing
@@ -116,7 +129,7 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
           onlyPushChanges: true,
         });
 
-        if (subscription) {
+        if (subscription && !(subscription instanceof Error)) {
           const key = `job_postings_${Date.now()}`;
           setSubscriptions((prev) => new Map(prev.set(key, subscription)));
           return subscription.unsubscribe;
@@ -164,7 +177,7 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
           onlyPushChanges: true,
         });
 
-        if (subscription) {
+        if (subscription && !(subscription instanceof Error)) {
           const key = `milestone_${escrowId}_${Date.now()}`;
           setSubscriptions((prev) => new Map(prev.set(key, subscription)));
           return subscription.unsubscribe;
@@ -207,7 +220,7 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
           onlyPushChanges: true,
         });
 
-        if (subscription) {
+        if (subscription && !(subscription instanceof Error)) {
           const key = `escrow_status_${escrowId}_${Date.now()}`;
           setSubscriptions((prev) => new Map(prev.set(key, subscription)));
           return subscription.unsubscribe;
@@ -248,7 +261,7 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
           onlyPushChanges: true,
         });
 
-        if (subscription) {
+        if (subscription && !(subscription instanceof Error)) {
           const key = `applications_${jobId}_${Date.now()}`;
           setSubscriptions((prev) => new Map(prev.set(key, subscription)));
           return subscription.unsubscribe;
@@ -291,7 +304,7 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
           onlyPushChanges: true,
         });
 
-        if (subscription) {
+        if (subscription && !(subscription instanceof Error)) {
           const key = `disputes_${escrowId}_${Date.now()}`;
           setSubscriptions((prev) => new Map(prev.set(key, subscription)));
           return subscription.unsubscribe;
@@ -334,13 +347,140 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
           onlyPushChanges: true,
         });
 
-        if (subscription) {
+        if (subscription && !(subscription instanceof Error)) {
           const key = `ratings_${escrowId}_${Date.now()}`;
           setSubscriptions((prev) => new Map(prev.set(key, subscription)));
           return subscription.unsubscribe;
         }
       } catch (error) {
         console.error("Error subscribing to ratings:", error);
+      }
+
+      return () => {};
+    },
+    [sdk]
+  );
+
+  const subscribeToMilestoneSubmissions = useCallback(
+    async (escrowId: string, onData: (data: any) => void) => {
+      if (!sdk) {
+        throw new Error("Somnia SDK not initialized");
+      }
+
+      try {
+        const subscription = await sdk.streams.subscribe({
+          somniaStreamsEventId: EVENT_SCHEMA_IDS.MILESTONE_SUBMITTED,
+          ethCalls: [],
+          context: "topic1", // escrowId in event
+          onData: (data) => {
+            const decoded = Array.isArray(data) ? data : [data];
+            decoded.forEach((item) => {
+              const fields = item.data || item;
+              const escrowIdField = fields.find(
+                (f: any) => f.name === "escrowId"
+              );
+              // Convert escrowId to string for comparison
+              const eventEscrowId = escrowIdField?.value?.toString();
+              if (eventEscrowId === escrowId || eventEscrowId === escrowId.toString()) {
+                onData(item);
+              }
+            });
+          },
+          onError: (error) => console.error("Milestone submission subscription error:", error),
+          onlyPushChanges: true,
+        });
+
+        if (subscription && !(subscription instanceof Error)) {
+          const key = `milestone_submissions_${escrowId}_${Date.now()}`;
+          setSubscriptions((prev) => new Map(prev.set(key, subscription)));
+          return subscription.unsubscribe;
+        }
+      } catch (error) {
+        console.error("Error subscribing to milestone submissions:", error);
+      }
+
+      return () => {};
+    },
+    [sdk]
+  );
+
+  const subscribeToMilestoneApprovals = useCallback(
+    async (escrowId: string, onData: (data: any) => void) => {
+      if (!sdk) {
+        throw new Error("Somnia SDK not initialized");
+      }
+
+      try {
+        const subscription = await sdk.streams.subscribe({
+          somniaStreamsEventId: EVENT_SCHEMA_IDS.MILESTONE_APPROVED,
+          ethCalls: [],
+          context: "topic1", // escrowId in event
+          onData: (data) => {
+            const decoded = Array.isArray(data) ? data : [data];
+            decoded.forEach((item) => {
+              const fields = item.data || item;
+              const escrowIdField = fields.find(
+                (f: any) => f.name === "escrowId"
+              );
+              const eventEscrowId = escrowIdField?.value?.toString();
+              if (eventEscrowId === escrowId || eventEscrowId === escrowId.toString()) {
+                onData(item);
+              }
+            });
+          },
+          onError: (error) => console.error("Milestone approval subscription error:", error),
+          onlyPushChanges: true,
+        });
+
+        if (subscription && !(subscription instanceof Error)) {
+          const key = `milestone_approvals_${escrowId}_${Date.now()}`;
+          setSubscriptions((prev) => new Map(prev.set(key, subscription)));
+          return subscription.unsubscribe;
+        }
+      } catch (error) {
+        console.error("Error subscribing to milestone approvals:", error);
+      }
+
+      return () => {};
+    },
+    [sdk]
+  );
+
+  const subscribeToMilestoneRejections = useCallback(
+    async (escrowId: string, onData: (data: any) => void) => {
+      if (!sdk) {
+        throw new Error("Somnia SDK not initialized");
+      }
+
+      try {
+        const subscription = await sdk.streams.subscribe({
+          somniaStreamsEventId: EVENT_SCHEMA_IDS.MILESTONE_REJECTED,
+          ethCalls: [],
+          context: "topic1", // escrowId in event
+          onData: (data) => {
+            const decoded = Array.isArray(data) ? data : [data];
+            decoded.forEach((item) => {
+              const fields = item.data || item;
+              const escrowIdField = fields.find(
+                (f: any) => f.name === "escrowId"
+              );
+              const eventEscrowId = escrowIdField?.value?.toString();
+              if (eventEscrowId === escrowId || eventEscrowId === escrowId.toString()) {
+                onData(item);
+              }
+            });
+          },
+          onError: (error) => console.error("Milestone rejection subscription error:", error),
+          onlyPushChanges: true,
+        });
+
+        if (subscription && !(subscription instanceof Error)) {
+          const key = `milestone_rejections_${escrowId}_${Date.now()}`;
+          setSubscriptions((prev) => new Map(prev.set(key, subscription)));
+          return subscription.unsubscribe;
+        }
+      } catch (error) {
+        console.error("Error subscribing to milestone rejections:", error);
       }
 
       return () => {};
@@ -355,6 +495,9 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
         isInitialized,
         subscribeToJobPostings,
         subscribeToMilestoneUpdates,
+        subscribeToMilestoneSubmissions,
+        subscribeToMilestoneApprovals,
+        subscribeToMilestoneRejections,
         subscribeToEscrowStatus,
         subscribeToApplications,
         subscribeToDisputes,
