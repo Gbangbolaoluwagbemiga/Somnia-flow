@@ -5,10 +5,14 @@ import {
   useContext,
   useState,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import { useWeb3 } from "./web3-context";
 import { useToast } from "@/hooks/use-toast";
+import { useSomniaStreams } from "./somnia-streams-context";
+import { CONTRACTS } from "@/lib/web3/config";
+import { SECUREFLOW_ABI } from "@/lib/web3/abis";
 
 export interface Notification {
   id: string;
@@ -44,10 +48,47 @@ const NotificationContext = createContext<NotificationContextType | undefined>(
   undefined
 );
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+const formatAddress = (address?: string) => {
+  if (!address) return "Unknown";
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+};
+
+const normalizeIdValue = (value: any): string | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") {
+    if (value.startsWith("0x")) {
+      try {
+        return BigInt(value).toString();
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "bigint") {
+    return value.toString();
+  }
+  if (typeof value === "object" && "toString" in value) {
+    try {
+      return value.toString();
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { wallet } = useWeb3();
+  const { wallet, getContract } = useWeb3();
+  const { subscribeToApplications } = useSomniaStreams();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [clientJobIds, setClientJobIds] = useState<string[]>([]);
+  const [jobMetadata, setJobMetadata] = useState<Record<string, string>>({});
+  const processedApplicationIds = useRef<Set<string>>(new Set());
+  const applicationSubscriptions = useRef<Record<string, () => void>>({});
 
   // Load notifications from localStorage on mount and when wallet changes
   useEffect(() => {
@@ -86,6 +127,200 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       );
     }
   }, [notifications, wallet.isConnected, wallet.address]);
+
+  // Fetch open job IDs (client-owned open jobs) for application subscriptions
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchClientJobs = async () => {
+      if (!wallet.isConnected || !wallet.address) {
+        if (isMounted) {
+          setClientJobIds([]);
+          setJobMetadata({});
+        }
+        return;
+      }
+
+      try {
+        const contract = getContract(
+          CONTRACTS.SECUREFLOW_ESCROW,
+          SECUREFLOW_ABI
+        );
+        if (!contract) return;
+
+        const totalEscrows = await contract.call("nextEscrowId");
+        const total = Number(totalEscrows);
+        const ownedJobIds: string[] = [];
+        const titles: Record<string, string> = {};
+        const lowerAddress = wallet.address.toLowerCase();
+
+        for (let id = 1; id < total; id++) {
+          try {
+            const escrowSummary = await contract.call("getEscrowSummary", id);
+            const payer = escrowSummary[0]?.toLowerCase?.();
+            const beneficiary = escrowSummary[1];
+            const isOpenJob = beneficiary === ZERO_ADDRESS;
+
+            if (payer === lowerAddress && isOpenJob) {
+              const jobIdStr = id.toString();
+              ownedJobIds.push(jobIdStr);
+              titles[jobIdStr] =
+                escrowSummary[13] || escrowSummary[14] || `Job #${jobIdStr}`;
+            }
+          } catch (jobError) {
+            continue;
+          }
+        }
+
+        if (isMounted) {
+          setClientJobIds(ownedJobIds);
+          setJobMetadata(titles);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setClientJobIds([]);
+          setJobMetadata({});
+        }
+      }
+    };
+
+    fetchClientJobs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [wallet.isConnected, wallet.address, getContract]);
+
+  // Subscribe to application events via Somnia Data Streams for client-owned jobs
+  useEffect(() => {
+    if (
+      !wallet.isConnected ||
+      !wallet.address ||
+      !subscribeToApplications ||
+      clientJobIds.length === 0
+    ) {
+      // Cleanup existing subscriptions if wallet disconnected
+      Object.values(applicationSubscriptions.current).forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error("Error unsubscribing from job applications:", error);
+        }
+      });
+      applicationSubscriptions.current = {};
+      processedApplicationIds.current.clear();
+      return;
+    }
+
+    const activeSubscriptions = applicationSubscriptions.current;
+    const jobIdSet = new Set(clientJobIds);
+
+    // Unsubscribe from jobs no longer relevant
+    Object.keys(activeSubscriptions).forEach((jobId) => {
+      if (!jobIdSet.has(jobId)) {
+        try {
+          activeSubscriptions[jobId]?.();
+        } catch (error) {
+          console.error("Error unsubscribing from job:", jobId, error);
+        }
+        delete activeSubscriptions[jobId];
+      }
+    });
+
+    // Subscribe to new job IDs
+    clientJobIds.forEach((jobId) => {
+      if (activeSubscriptions[jobId]) {
+        return;
+      }
+
+      subscribeToApplications(jobId, (data) => {
+        try {
+          const fields = data.data || data;
+          const applicationIdField = fields.find(
+            (f: any) => f.name === "applicationId"
+          );
+          const applicantField = fields.find(
+            (f: any) => f.name === "applicant"
+          );
+          const coverLetterField = fields.find(
+            (f: any) => f.name === "coverLetter"
+          );
+
+          const applicationId = normalizeIdValue(applicationIdField?.value);
+
+          if (
+            applicationId &&
+            processedApplicationIds.current.has(applicationId)
+          ) {
+            return;
+          }
+
+          if (applicationId) {
+            processedApplicationIds.current.add(applicationId);
+          }
+
+          const applicantAddress =
+            (applicantField?.value || applicantField)?.toString() || "";
+
+          if (!applicantAddress) {
+            return;
+          }
+
+          const jobTitle =
+            jobMetadata[jobId] ||
+            jobMetadata[jobId]?.toString() ||
+            `Job #${jobId}`;
+
+          addNotification(
+            createApplicationNotification(
+              "submitted",
+              Number(jobId),
+              applicantAddress,
+              {
+                jobTitle,
+                freelancerName: formatAddress(applicantAddress),
+                coverLetterPreview:
+                  typeof coverLetterField?.value === "string"
+                    ? coverLetterField.value.slice(0, 120)
+                    : undefined,
+              }
+            )
+          );
+
+          toast({
+            title: "New Job Application",
+            description: `${formatAddress(
+              applicantAddress
+            )} just applied to ${jobTitle}`,
+          });
+        } catch (error) {
+          console.error("Error processing job application event:", error);
+        }
+      })
+        .then((unsubscribe) => {
+          if (unsubscribe) {
+            activeSubscriptions[jobId] = unsubscribe;
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Error subscribing to applications for job:",
+            jobId,
+            error
+          );
+        });
+    });
+
+    return () => {
+      // Cleanup handled separately when dependencies change or component unmounts
+    };
+  }, [
+    wallet.isConnected,
+    wallet.address,
+    subscribeToApplications,
+    clientJobIds.join(","),
+    JSON.stringify(jobMetadata),
+  ]);
 
   const addNotification = (
     notification: Omit<Notification, "id" | "timestamp" | "read">,
