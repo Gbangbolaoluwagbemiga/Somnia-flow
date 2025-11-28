@@ -332,6 +332,7 @@ export function MilestoneActions({
                   "This milestone is not in submitted state and cannot be approved",
                 variant: "destructive",
               });
+              setIsLoading(false);
               return;
             }
 
@@ -419,11 +420,10 @@ export function MilestoneActions({
                 ]);
               } else {
                 // Fallback: use polling to check transaction status
-
                 receipt = await pollTransactionReceipt(txHash);
               }
 
-              if (receipt.status === 1) {
+              if (receipt.status === 1 || receipt.status === "0x1") {
                 // Transaction confirmed - now show success toast
                 toast({
                   title: "Milestone approved!",
@@ -453,6 +453,10 @@ export function MilestoneActions({
 
                 // Call onSuccess to refresh data (no page reload needed)
                 onSuccess();
+                
+                // Reset loading state and return to prevent outer catch
+                setIsLoading(false);
+                return;
               } else {
                 throw new Error("Transaction failed on blockchain");
               }
@@ -462,7 +466,7 @@ export function MilestoneActions({
                 // Try polling one more time
                 try {
                   const finalReceipt = await pollTransactionReceipt(txHash);
-                  if (finalReceipt && finalReceipt.status === 1) {
+                  if (finalReceipt && (finalReceipt.status === 1 || finalReceipt.status === "0x1")) {
                     toast({
                       title: "Milestone approved!",
                       description:
@@ -492,6 +496,9 @@ export function MilestoneActions({
 
                     // Call onSuccess to refresh data (no page reload needed)
                     onSuccess();
+                    
+                    // Reset loading state and return to prevent outer catch
+                    setIsLoading(false);
                     return;
                   }
                 } catch (finalError) {
@@ -507,6 +514,8 @@ export function MilestoneActions({
                     "The transaction is taking longer than expected. Please check the blockchain explorer to see if it was successful.",
                   variant: "destructive",
                 });
+                setIsLoading(false);
+                return;
               } else {
                 throw new Error("Transaction failed to confirm on blockchain");
               }
@@ -552,9 +561,8 @@ export function MilestoneActions({
                 variant: "destructive",
               });
             }
-            throw error; // Re-throw to prevent success toast
-          } finally {
             setIsLoading(false);
+            return; // Return instead of throwing to prevent outer catch
           }
           break;
         case "reject":
