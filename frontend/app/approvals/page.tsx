@@ -36,7 +36,7 @@ export default function ApprovalsPage() {
   const { toast } = useToast();
   const { isJobCreator } = useJobCreatorStatus();
   const { hasPendingApprovals, refreshApprovals } = usePendingApprovals();
-  const { addNotification } = useNotifications();
+  const { addNotification, addCrossWalletNotification } = useNotifications();
   const router = useRouter();
   const [jobs, setJobs] = useState<JobWithApplications[]>([]);
   const [loading, setLoading] = useState(true);
@@ -491,7 +491,7 @@ export default function ApprovalsPage() {
 
       // Add notification for freelancer approval - notify ONLY the FREELANCER
       // Skip current user (job creator) - they shouldn't see this notification
-      addNotification(
+      addCrossWalletNotification(
         createApplicationNotification(
           "approved",
           Number(selectedJobForApproval.id),
@@ -506,8 +506,8 @@ export default function ApprovalsPage() {
               selectedFreelancer.freelancerAddress.slice(-4),
           }
         ),
-        [selectedFreelancer.freelancerAddress], // Notify ONLY the freelancer
-        true // Skip current user - job creator shouldn't see this
+        undefined,
+        selectedFreelancer.freelancerAddress // Notify ONLY the freelancer
       );
 
       // Close modals first
@@ -758,7 +758,7 @@ export default function ApprovalsPage() {
       })()}
       {selectedFreelancer && (
         <div
-          className="fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 z-[100]"
+          className="fixed inset-0 backdrop-blur-sm flex items-center justify-center p-4 z-100"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setSelectedFreelancer(null);

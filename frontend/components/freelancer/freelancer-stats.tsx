@@ -177,7 +177,7 @@ export function FreelancerStats({
             freelancerRating.totalRatings > 0 &&
             freelancerRating.averageRating > 0
               ? freelancerRating.averageRating.toFixed(1)
-              : "N/A"}
+              : "New"}
           </div>
           <p className="text-xs text-muted-foreground">
             {freelancerRating &&
@@ -186,7 +186,7 @@ export function FreelancerStats({
               ? `${freelancerRating.totalRatings} ${
                   freelancerRating.totalRatings === 1 ? "rating" : "ratings"
                 }`
-              : "No ratings yet"}
+              : "Be the first to leave a review"}
           </p>
         </CardContent>
       </Card>
