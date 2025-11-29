@@ -684,7 +684,10 @@ export default function ApprovalsPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">
-                  Review Applications - {selectedJob.projectDescription}
+                  Review Applications -{" "}
+                  {selectedJob.projectTitle ||
+                    selectedJob.projectDescription ||
+                    `Job #${selectedJob.id}`}
                 </h3>
                 <button
                   onClick={() => {

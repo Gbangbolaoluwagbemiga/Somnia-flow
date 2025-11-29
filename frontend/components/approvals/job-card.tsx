@@ -35,6 +35,7 @@ interface JobWithApplications {
   createdAt: number;
   duration: number;
   milestones: any[];
+  projectTitle?: string;
   projectDescription?: string;
   isOpenJob?: boolean;
   applications: Application[];
@@ -72,7 +73,9 @@ export function JobCard({
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-3">
-              <h3 className="text-xl font-bold">Job #{job.id}</h3>
+              <h3 className="text-xl font-bold">
+                {job.projectTitle || `Job #${job.id}`}
+              </h3>
               <Badge variant="secondary" className="gap-1">
                 <Clock className="h-3 w-3" />
                 {job.duration} days
@@ -125,7 +128,9 @@ export function JobCard({
               </DialogTrigger>
               <DialogContent className="glass max-w-4xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Job #{job.id} Applications</DialogTitle>
+                  <DialogTitle>
+                    {job.projectTitle || `Job #${job.id}`} - Applications
+                  </DialogTitle>
                   <DialogDescription>
                     Review and approve freelancer applications for this job.
                   </DialogDescription>
