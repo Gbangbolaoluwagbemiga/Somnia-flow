@@ -1621,22 +1621,60 @@ export default function DashboardPage() {
       if (!contract) return;
 
       setSubmittingMilestone(escrowId);
-      await contract.send("disputeMilestone", escrowId, 0, "General dispute");
-      toast({
-        title: "Dispute Opened",
-        description: "A dispute has been opened for this escrow",
-      });
+      
+      // Send transaction and get hash
+      const txHash = await contract.send("disputeMilestone", escrowId, 0, "General dispute");
+      
+      // Wait for transaction receipt
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 15;
 
-      // Wait a moment for blockchain state to update
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      await fetchUserEscrows();
-    } catch (error) {
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
+          if (receipt) break;
+        } catch (error) {}
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts++;
+      }
+
+      // Check if transaction succeeded
+      if (receipt && receipt.status === "0x1") {
+        // Success - show toast and close modal
+        toast({
+          title: "Dispute Opened",
+          description: "A dispute has been opened for this escrow",
+        });
+
+        // Close modal
+        setSubmittingMilestone(null);
+
+        // Wait for indexer and reload page
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else if (receipt && receipt.status !== "0x1") {
+        // Transaction failed
+        throw new Error("Transaction failed on blockchain");
+      } else {
+        // No receipt - transaction pending
+        toast({
+          title: "Transaction Sent",
+          description: "Waiting for confirmation...",
+        });
+        setSubmittingMilestone(null);
+      }
+    } catch (error: any) {
+      console.error("Error opening dispute:", error);
       toast({
         title: "Dispute Failed",
-        description: "Could not open dispute. Please try again.",
+        description: error.message || "Could not open dispute. Please try again.",
         variant: "destructive",
       });
-    } finally {
       setSubmittingMilestone(null);
     }
   };
@@ -1699,100 +1737,19 @@ export default function DashboardPage() {
       // If we have a receipt and it succeeded, update UI immediately
       // But also wait for Data Streams to confirm (handled in subscription)
       if (receipt && receipt.status === "0x1") {
-        // Transaction confirmed - update UI immediately
-        // Get freelancer address from escrow data
-        const freelancerAddress = escrow.beneficiary;
-
-        // Add cross-wallet notification for milestone approval
-        addCrossWalletNotification(
-          createMilestoneNotification("approved", escrowId, milestoneIndex, {
-            clientName:
-              wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-            projectTitle: escrow.projectDescription || `Project #${escrowId}`,
-          }),
-          wallet.address || undefined, // Client address
-          freelancerAddress // Freelancer address
-        );
-
-        // Optimistically update UI immediately
-        setEscrows((prevEscrows) =>
-          prevEscrows.map((e) => {
-            if (e.id === escrowId) {
-              const updatedMilestones = [...e.milestones];
-              if (updatedMilestones[milestoneIndex]) {
-                updatedMilestones[milestoneIndex] = {
-                  ...updatedMilestones[milestoneIndex],
-                  status: "approved" as const,
-                  approvedAt: Date.now(),
-                };
-              }
-
-              // Update released amount
-              const milestoneAmount = Number.parseFloat(
-                updatedMilestones[milestoneIndex]?.amount || "0"
-              );
-              const newReleasedAmount =
-                Number.parseFloat(e.releasedAmount) + milestoneAmount;
-
-              // Check if all milestones are approved (escrow completed)
-              const allApproved = updatedMilestones.every(
-                (m) => m.status === "approved"
-              );
-
-              return {
-                ...e,
-                milestones: updatedMilestones,
-                releasedAmount: newReleasedAmount.toString(),
-                status: allApproved ? "completed" : e.status,
-              };
-            }
-            return e;
-          })
-        );
-
-        // Show success toast with indexer wait message
+        // Transaction confirmed - show success and reload page
         toast({
           title: "Milestone Approved!",
-          description: "Payment sent. Refreshing data from blockchain...",
+          description: "Payment sent. Reloading dashboard...",
         });
 
         // Close modal by clearing submitting state
         setSubmittingMilestone(null);
 
-        // Wait for Somnia indexer to process the event
-        // Use multiple refresh attempts to ensure we catch the update
-        let refreshAttempts = 0;
-        const maxRefreshAttempts = 10; // Increased attempts for robustness
-        const refreshInterval = 3000; // 3 seconds between attempts
-
-        const attemptRefresh = async () => {
-          refreshAttempts++;
-          try {
-            await fetchUserEscrows();
-            
-            if (refreshAttempts === 1) {
-              toast({
-                title: "Refreshing Data",
-                description: `Checking for updates (${refreshAttempts}/${maxRefreshAttempts})...`,
-              });
-            } else if (refreshAttempts === maxRefreshAttempts) {
-              toast({
-                title: "Dashboard Updated",
-                description: "Milestone status has been refreshed from blockchain",
-              });
-            }
-          } catch (error) {
-            console.error(`Error refreshing escrows (attempt ${refreshAttempts}):`, error);
-          }
-
-          // Schedule next refresh if not at max attempts
-          if (refreshAttempts < maxRefreshAttempts) {
-            setTimeout(attemptRefresh, refreshInterval);
-          }
-        };
-
-        // Start the refresh cycle after initial delay for indexer
-        setTimeout(attemptRefresh, 2000); // Initial 2 second delay
+        // Wait 2 seconds for indexer, then reload page to show updated state
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       } else {
         // No receipt yet, but we have a txHash - transaction is pending
         // Don't show error - wait for Somnia Data Streams to detect the event
