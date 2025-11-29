@@ -158,7 +158,7 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
         const subscription = await sdk.streams.subscribe({
           somniaStreamsEventId: EVENT_SCHEMA_IDS.MILESTONE_UPDATED,
           ethCalls: [],
-          context: "topic1", // escrowId in event
+          // context: "topic1", // Removed to allow all events and filter client-side
           onData: (data) => {
             // Filter by escrowId
             const encoder = new SchemaEncoder(MILESTONE_UPDATE_SCHEMA);
@@ -371,7 +371,7 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
         const subscription = await sdk.streams.subscribe({
           somniaStreamsEventId: EVENT_SCHEMA_IDS.MILESTONE_SUBMITTED,
           ethCalls: [],
-          context: "topic1", // escrowId in event
+          // context: "topic1", // Removed to allow all events and filter client-side
           onData: (data) => {
             const decoded = Array.isArray(data) ? data : [data];
             decoded.forEach((item) => {
@@ -414,7 +414,7 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
         const subscription = await sdk.streams.subscribe({
           somniaStreamsEventId: EVENT_SCHEMA_IDS.MILESTONE_APPROVED,
           ethCalls: [],
-          context: "topic1", // escrowId in event
+          // context: "topic1", // Removed to allow all events and filter client-side
           onData: (data) => {
             const decoded = Array.isArray(data) ? data : [data];
             decoded.forEach((item) => {
@@ -456,7 +456,7 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
         const subscription = await sdk.streams.subscribe({
           somniaStreamsEventId: EVENT_SCHEMA_IDS.MILESTONE_REJECTED,
           ethCalls: [],
-          context: "topic1", // escrowId in event
+          // context: "topic1", // Removed to allow all events and filter client-side
           onData: (data) => {
             const decoded = Array.isArray(data) ? data : [data];
             decoded.forEach((item) => {
