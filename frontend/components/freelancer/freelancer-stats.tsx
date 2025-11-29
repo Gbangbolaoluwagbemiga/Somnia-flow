@@ -42,11 +42,14 @@ export function FreelancerStats({
   );
 
   // Helper function to check if an escrow is terminated
+  // Terminated includes: disputed, rejected, or resolved milestones
   const isEscrowTerminated = (escrow: any) => {
-    return escrow.milestones.some(
-      (milestone: any) =>
-        milestone.status === "disputed" || milestone.status === "rejected"
-    );
+    return escrow.milestones.some((milestone: any) => {
+      const status = milestone.status?.toLowerCase();
+      return (
+        status === "disputed" || status === "rejected" || status === "resolved"
+      );
+    });
   };
 
   const completedProjects = escrows.filter((escrow) => {

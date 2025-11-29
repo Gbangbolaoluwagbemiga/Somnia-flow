@@ -92,7 +92,8 @@ interface Milestone {
 export default function FreelancerPage() {
   const { wallet, getContract } = useWeb3();
   const { addNotification, addCrossWalletNotification } = useNotifications();
-  const { subscribeToMilestoneUpdates } = useSomniaStreams();
+  const { subscribeToMilestoneUpdates, subscribeToEscrowStatus } =
+    useSomniaStreams();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(false);
   const [submittingMilestone, setSubmittingMilestone] = useState<string | null>(
@@ -196,7 +197,7 @@ export default function FreelancerPage() {
             const milestoneIndex = Number(milestoneIndexField.value);
             const status = Number(statusField.value);
 
-            // Status 1 = submitted/resubmitted, Status 2 = approved, Status 5 = rejected
+            // Status 1 = submitted/resubmitted, Status 2 = approved, Status 4 = resolved, Status 5 = rejected
             // Enum: NotStarted(0), Submitted(1), Approved(2), Disputed(3), Resolved(4), Rejected(5)
             if (status === 1) {
               // Milestone submitted/resubmitted
@@ -276,6 +277,86 @@ export default function FreelancerPage() {
 
               // Refresh from blockchain in background to ensure accuracy
               fetchFreelancerEscrows().catch(console.error);
+            } else if (status === 3) {
+              // Milestone disputed
+              console.log(
+                "📊 Milestone disputed event received via Somnia Data Streams:",
+                {
+                  escrowId: escrow.id,
+                  milestoneIndex,
+                  status,
+                }
+              );
+
+              // Get dispute reason from event data if available
+              const reasonField = fields.find(
+                (f: any) => f.name === "reason" || f.name === "disputeReason"
+              );
+              const disputeReason = reasonField?.value || "";
+
+              // Update UI reactively when milestone is disputed
+              setEscrows((prevEscrows) =>
+                prevEscrows.map((e) => {
+                  if (e.id === escrow.id) {
+                    const updatedMilestones = [...e.milestones];
+                    if (updatedMilestones[milestoneIndex]) {
+                      updatedMilestones[milestoneIndex] = {
+                        ...updatedMilestones[milestoneIndex],
+                        status: "disputed" as const,
+                        disputeReason: disputeReason,
+                      };
+                    }
+                    return {
+                      ...e,
+                      milestones: updatedMilestones,
+                    };
+                  }
+                  return e;
+                })
+              );
+
+              // Refresh from blockchain in background to ensure accuracy
+              fetchFreelancerEscrows().catch(console.error);
+            } else if (status === 4) {
+              // Milestone resolved (dispute resolved)
+              console.log(
+                "📊 Milestone resolved event received via Somnia Data Streams:",
+                {
+                  escrowId: escrow.id,
+                  milestoneIndex,
+                  status,
+                }
+              );
+
+              // Get resolution details from event data if available
+              const reasonField = fields.find(
+                (f: any) => f.name === "reason" || f.name === "resolutionReason"
+              );
+              const resolutionReason = reasonField?.value || "";
+
+              // Update UI reactively when milestone is resolved
+              setEscrows((prevEscrows) =>
+                prevEscrows.map((e) => {
+                  if (e.id === escrow.id) {
+                    const updatedMilestones = [...e.milestones];
+                    if (updatedMilestones[milestoneIndex]) {
+                      updatedMilestones[milestoneIndex] = {
+                        ...updatedMilestones[milestoneIndex],
+                        status: "resolved" as const,
+                        resolutionReason: resolutionReason,
+                      };
+                    }
+                    return {
+                      ...e,
+                      milestones: updatedMilestones,
+                    };
+                  }
+                  return e;
+                })
+              );
+
+              // Refresh from blockchain in background to ensure accuracy
+              fetchFreelancerEscrows().catch(console.error);
             } else if (status === 5) {
               // Milestone rejected
               console.log(
@@ -342,6 +423,62 @@ export default function FreelancerPage() {
     wallet.isConnected,
     escrows.map((e) => e.id).join(","),
     subscribeToMilestoneUpdates,
+  ]);
+
+  // Subscribe to escrow status changes using Somnia Data Streams
+  useEffect(() => {
+    if (!wallet.isConnected || !subscribeToEscrowStatus || escrows.length === 0)
+      return;
+
+    const unsubscribeFunctions: (() => void)[] = [];
+
+    // Subscribe to escrow status changes for all freelancer's escrows
+    escrows.forEach((escrow) => {
+      subscribeToEscrowStatus(escrow.id, (data) => {
+        try {
+          const fields = data.data || data;
+          const newStatusField = fields.find(
+            (f: any) => f.name === "newStatus" || f.name === "status"
+          );
+
+          if (newStatusField) {
+            const newStatus = Number(newStatusField.value);
+            console.log(
+              "📊 Escrow status changed event received via Somnia Data Streams:",
+              {
+                escrowId: escrow.id,
+                newStatus,
+              }
+            );
+
+            // Refresh escrows from blockchain to get latest milestone states
+            // This ensures we pick up resolved disputes
+            fetchFreelancerEscrows().catch(console.error);
+          }
+        } catch (error) {
+          console.error("Error processing escrow status update:", error);
+        }
+      })
+        .then((unsubscribe) => {
+          if (unsubscribe) unsubscribeFunctions.push(unsubscribe);
+        })
+        .catch(console.error);
+    });
+
+    // Cleanup subscriptions on unmount or when escrow IDs change
+    return () => {
+      unsubscribeFunctions.forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error("Error unsubscribing:", error);
+        }
+      });
+    };
+  }, [
+    wallet.isConnected,
+    escrows.map((e) => e.id).join(","),
+    subscribeToEscrowStatus,
   ]);
 
   const fetchFreelancerEscrows = async () => {
@@ -462,6 +599,7 @@ export default function FreelancerPage() {
                     let status = 0;
                     let submittedAt = undefined;
                     let approvedAt = undefined;
+                    let disputedBy = "";
                     let disputeReason = "";
                     let rejectionReason = "";
 
@@ -525,7 +663,14 @@ export default function FreelancerPage() {
                               approvedAt = Number(m[4]) * 1000;
                             }
 
-                            // Parse dispute reason (index 7 in contract)
+                            // Parse disputedBy (index 6 in contract) - for disputed: who disputed, for resolved: winner
+                            if (m.disputedBy !== undefined) {
+                              disputedBy = String(m.disputedBy);
+                            } else if (m[6] !== undefined) {
+                              disputedBy = String(m[6]);
+                            }
+
+                            // Parse dispute reason (index 7 in contract) - for disputed: dispute reason, for resolved: resolution reason
                             if (m.disputeReason !== undefined) {
                               disputeReason = String(m.disputeReason);
                             } else if (m[7] !== undefined) {
@@ -1340,6 +1485,29 @@ export default function FreelancerPage() {
     return statuses[status] || "Unknown";
   };
 
+  // Check if an escrow should be marked as terminated (has disputed or resolved milestones)
+  const isEscrowTerminated = (escrow: Escrow): boolean => {
+    return escrow.milestones.some(
+      (milestone) =>
+        milestone.status?.toLowerCase() === "disputed" ||
+        milestone.status?.toLowerCase() === "rejected" ||
+        milestone.status?.toLowerCase() === "resolved"
+    );
+  };
+
+  // Check if all disputes have been resolved
+  const hasAllDisputesResolved = (escrow: Escrow): boolean => {
+    const disputedMilestones = escrow.milestones.filter(
+      (milestone) => milestone.status?.toLowerCase() === "disputed"
+    );
+    return (
+      disputedMilestones.length === 0 &&
+      escrow.milestones.some(
+        (milestone) => milestone.status?.toLowerCase() === "resolved"
+      )
+    );
+  };
+
   const getMilestoneStatusFromNumber = (status: number): string => {
     const statuses = [
       "pending", // 0 - NotStarted
@@ -1387,9 +1555,53 @@ export default function FreelancerPage() {
         return "bg-green-100 text-green-800";
       case "terminated":
         return "bg-gray-100 text-gray-800";
+      case "resolved":
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400";
+      case "disputed":
+        return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
+  };
+
+  // Get the final status for display, accounting for resolved disputes
+  const getFinalStatus = (escrow: Escrow): string => {
+    // First check if there are active disputes (not yet resolved)
+    // Use case-insensitive comparison to be safe
+    const hasActiveDispute = escrow.milestones.some((milestone) => {
+      const status = milestone.status?.toLowerCase();
+      return status === "disputed";
+    });
+
+    // If there are active disputes, show as "disputed"
+    if (hasActiveDispute) {
+      return "disputed";
+    }
+
+    // Also check if escrow-level status is "disputed" (from contract)
+    if (escrow.status?.toLowerCase() === "disputed") {
+      return "disputed";
+    }
+
+    // Check if there are resolved disputes
+    const hasResolvedDispute = hasAllDisputesResolved(escrow);
+
+    // If there are resolved disputes, show as "resolved" instead of "active"
+    if (hasResolvedDispute) {
+      return "resolved";
+    }
+
+    // Check if this escrow should be terminated (has rejected milestones)
+    const hasRejectedMilestones = escrow.milestones.some(
+      (milestone) => milestone.status?.toLowerCase() === "rejected"
+    );
+
+    // If terminated (has rejected milestones), show as "terminated"
+    if (hasRejectedMilestones) {
+      return "terminated";
+    }
+
+    return escrow.status;
   };
 
   const formatAmount = (amount: string) => {
@@ -1444,11 +1656,26 @@ export default function FreelancerPage() {
   const getFilteredAndSortedEscrows = () => {
     let filtered = [...escrows];
 
-    // Apply status filter
+    // Apply status filter - use getFinalStatus to check computed status
     if (statusFilter !== "all") {
+      const filterValue = statusFilter.toLowerCase();
+
       filtered = filtered.filter((e) => {
-        const status = e.status.toLowerCase();
-        return status === statusFilter.toLowerCase();
+        const finalStatus = getFinalStatus(e).toLowerCase();
+
+        // Special handling for "disputed" filter - include both active disputes and resolved disputes
+        if (filterValue === "disputed") {
+          const hasActiveDispute = e.milestones.some(
+            (m) => m.status?.toLowerCase() === "disputed"
+          );
+          const hasResolvedDispute = e.milestones.some(
+            (m) => m.status?.toLowerCase() === "resolved"
+          );
+          // Include escrows with active disputes OR resolved disputes
+          return hasActiveDispute || hasResolvedDispute;
+        }
+
+        return finalStatus === filterValue;
       });
     }
 
@@ -1483,10 +1710,12 @@ export default function FreelancerPage() {
             active: 1,
             completed: 2,
             disputed: 3,
+            resolved: 4,
+            terminated: 5,
           };
           return (
-            (statusOrder[a.status.toLowerCase()] ?? 99) -
-            (statusOrder[b.status.toLowerCase()] ?? 99)
+            (statusOrder[getFinalStatus(a).toLowerCase()] ?? 99) -
+            (statusOrder[getFinalStatus(b).toLowerCase()] ?? 99)
           );
         default:
           return 0;
@@ -1628,23 +1857,15 @@ export default function FreelancerPage() {
                             </CardDescription>
                           </div>
                           <Badge
-                            className={getStatusColor(
-                              escrow.milestones.some(
-                                (m) =>
-                                  m.status === "disputed" ||
-                                  m.status === "rejected"
-                              )
-                                ? "terminated"
-                                : escrow.status
-                            )}
+                            className={getStatusColor(getFinalStatus(escrow))}
                           >
-                            {escrow.milestones.some(
-                              (m) =>
-                                m.status === "disputed" ||
-                                m.status === "rejected"
-                            )
-                              ? "terminated"
-                              : escrow.status}
+                            {getFinalStatus(escrow) === "resolved"
+                              ? "Dispute Resolved"
+                              : getFinalStatus(escrow) === "disputed"
+                              ? "Disputed"
+                              : getFinalStatus(escrow) === "terminated"
+                              ? "Terminated"
+                              : getFinalStatus(escrow)}
                           </Badge>
                         </div>
                       </CardHeader>
