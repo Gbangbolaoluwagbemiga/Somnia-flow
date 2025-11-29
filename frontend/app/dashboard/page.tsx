@@ -1753,7 +1753,7 @@ export default function DashboardPage() {
         // Show success toast with indexer wait message
         toast({
           title: "Milestone Approved!",
-          description: "Payment sent. Waiting for indexer to process event...",
+          description: "Payment sent. Refreshing data from blockchain...",
         });
 
         // Close modal by clearing submitting state
@@ -1762,7 +1762,7 @@ export default function DashboardPage() {
         // Wait for Somnia indexer to process the event
         // Use multiple refresh attempts to ensure we catch the update
         let refreshAttempts = 0;
-        const maxRefreshAttempts = 3;
+        const maxRefreshAttempts = 10; // Increased attempts for robustness
         const refreshInterval = 3000; // 3 seconds between attempts
 
         const attemptRefresh = async () => {
@@ -1772,8 +1772,8 @@ export default function DashboardPage() {
             
             if (refreshAttempts === 1) {
               toast({
-                title: "Indexer Processing",
-                description: `Refresh ${refreshAttempts}/${maxRefreshAttempts} - Checking for updates...`,
+                title: "Refreshing Data",
+                description: `Checking for updates (${refreshAttempts}/${maxRefreshAttempts})...`,
               });
             } else if (refreshAttempts === maxRefreshAttempts) {
               toast({
@@ -1792,33 +1792,24 @@ export default function DashboardPage() {
         };
 
         // Start the refresh cycle after initial delay for indexer
-        setTimeout(attemptRefresh, 3000); // Initial 3 second delay
+        setTimeout(attemptRefresh, 2000); // Initial 2 second delay
       } else {
         // No receipt yet, but we have a txHash - transaction is pending
         // Don't show error - wait for Somnia Data Streams to detect the event
         // The subscription will handle UI updates and toast
         toast({
-          title: "Transaction Submitted",
-          description:
-            "Transaction is pending. The UI will update automatically when confirmed.",
-          variant: "default",
+          title: "Transaction Sent",
+          description: "Waiting for confirmation...",
         });
-        // Keep submittingMilestone set so modal stays open until Data Streams confirms
-        // The subscription will clear it when the event is received
+        setSubmittingMilestone(null);
       }
     } catch (error: any) {
-      // Only show error if it's a real failure (not a timeout)
-      const errorMessage = error.message || "Failed to approve milestone";
-      if (
-        !errorMessage.includes("timeout") &&
-        !errorMessage.includes("pending")
-      ) {
-        toast({
-          title: "Approval Failed",
-          description: errorMessage,
-          variant: "destructive",
-        });
-      }
+      console.error("Error approving milestone:", error);
+      toast({
+        title: "Approval Failed",
+        description: error.message || "Could not approve milestone",
+        variant: "destructive",
+      });
       setSubmittingMilestone(null);
     }
   };
