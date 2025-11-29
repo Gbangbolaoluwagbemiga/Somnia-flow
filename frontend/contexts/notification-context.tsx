@@ -1418,17 +1418,29 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // NOTE: Cross-wallet notifications are handled by Somnia Data Streams subscriptions.
-    // The subscriptions automatically detect on-chain events and notify users regardless of
-    // which wallet/browser they're using. No localStorage needed - events are indexed on-chain.
-    //
-    // Active subscriptions:
-    // - subscribeToMilestoneSubmissions: Notifies clients when freelancers submit milestones
-    // - subscribeToMilestoneApprovals: Notifies freelancers when clients approve milestones
-    // - subscribeToMilestoneRejections: Notifies freelancers when clients reject milestones
-    // - subscribeToEscrowStatus: Notifies clients when escrow status changes (e.g., work started)
-    // - subscribeToApplications: Notifies clients when freelancers apply for jobs
-    // - subscribeToDisputes: Notifies the other party when a dispute is created (client or freelancer)
+    // Store notification in localStorage for cross-wallet delivery
+    // This ensures notifications are available even if the user opens the app in a different browser/wallet
+    targetAddresses.forEach((targetAddress) => {
+      try {
+        const storageKey = `notifications_${targetAddress}`;
+        const existingNotifications = localStorage.getItem(storageKey);
+        const notifications = existingNotifications
+          ? JSON.parse(existingNotifications)
+          : [];
+
+        // Add new notification
+        notifications.unshift({
+          ...newNotification,
+          timestamp: newNotification.timestamp.toISOString(),
+        });
+
+        // Keep only last 100 notifications per address
+        const trimmedNotifications = notifications.slice(0, 100);
+        localStorage.setItem(storageKey, JSON.stringify(trimmedNotifications));
+      } catch (error) {
+        console.error("Error storing notification in localStorage:", error);
+      }
+    });
   };
 
   const unreadCount = notifications.filter((n) => !n.read).length;

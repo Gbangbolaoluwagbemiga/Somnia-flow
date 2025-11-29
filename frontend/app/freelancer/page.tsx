@@ -1271,10 +1271,8 @@ export default function FreelancerPage() {
         // Dispatch event to notify other components
         window.dispatchEvent(new CustomEvent("milestoneSubmitted"));
 
-        // Reload page after a delay to ensure all data is updated
-        setTimeout(() => {
-          window.location.reload();
-        }, 3000);
+        // Refresh escrows to update UI
+        await fetchFreelancerEscrows();
       } else {
         throw new Error("Transaction failed on blockchain");
       }
@@ -1330,13 +1328,32 @@ export default function FreelancerPage() {
       });
 
       // Wait for transaction to be mined using polling
+      // Check immediately first (transaction might be instant), then poll
       let receipt;
       let attempts = 0;
-      const maxAttempts = 60; // 60 attempts * 2 seconds = 2 minute timeout
+      const maxAttempts = 30; // 30 attempts
+      const pollInterval = 1000; // Check every 1 second
 
       console.log("Waiting for transaction receipt, hash:", txHash);
 
-      while (attempts < maxAttempts) {
+      // First check immediately (no delay)
+      try {
+        receipt = await window.ethereum.request({
+          method: "eth_getTransactionReceipt",
+          params: [txHash],
+        });
+        if (receipt) {
+          console.log("Transaction receipt received immediately:", receipt);
+        }
+      } catch (error) {
+        console.error("Error checking transaction receipt:", error);
+      }
+
+      // If not found immediately, poll with shorter intervals
+      while (!receipt && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        attempts++;
+
         try {
           receipt = await window.ethereum.request({
             method: "eth_getTransactionReceipt",
@@ -1344,15 +1361,12 @@ export default function FreelancerPage() {
           });
 
           if (receipt) {
-            console.log("Transaction receipt received:", receipt);
+            console.log("Transaction receipt received after polling:", receipt);
             break;
           }
         } catch (error) {
           console.error("Error checking transaction receipt:", error);
         }
-
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
-        attempts++;
       }
 
       if (!receipt) {
@@ -1364,7 +1378,7 @@ export default function FreelancerPage() {
         toast({
           title: "Transaction timeout",
           description:
-            "Transaction is taking longer than expected. Reloading page...",
+            "Transaction is taking longer than expected. Please check the blockchain explorer.",
           variant: "destructive",
         });
         // Clear form and close dialog
@@ -1372,9 +1386,8 @@ export default function FreelancerPage() {
         setShowResubmitDialog(false);
         setSelectedResubmitEscrow(null);
         setSelectedResubmitMilestone(null);
-        // FORCE RELOAD IMMEDIATELY
-        console.log("FORCING RELOAD - receipt timeout");
-        window.location.reload();
+        // Refresh escrows to update UI
+        fetchFreelancerEscrows().catch(console.error);
         return;
       }
 
@@ -1390,7 +1403,6 @@ export default function FreelancerPage() {
         isSuccess
       );
 
-      // Reload immediately after transaction is confirmed (success or failure)
       // Clear form and close dialog first
       setResubmitDescription("");
       setShowResubmitDialog(false);
@@ -1409,7 +1421,6 @@ export default function FreelancerPage() {
 
         // Add cross-wallet notification for milestone resubmission - notify ONLY the CLIENT
         if (clientAddress) {
-          // Don't await - just fire and forget, reload will happen anyway
           try {
             addCrossWalletNotification(
               createMilestoneNotification(
@@ -1434,17 +1445,18 @@ export default function FreelancerPage() {
             // Ignore notification errors
           }
         }
+
+        // Refresh escrows to update UI
+        await fetchFreelancerEscrows();
       } else {
         toast({
           title: "Transaction failed",
-          description: "Transaction failed on blockchain. Reloading page...",
+          description: "Transaction failed on blockchain",
           variant: "destructive",
         });
+        // Refresh escrows to update UI
+        fetchFreelancerEscrows().catch(console.error);
       }
-
-      // FORCE RELOAD - no delays, no conditions
-      console.log("FORCING RELOAD NOW - transaction confirmed");
-      window.location.reload();
     } catch (error) {
       console.error("Error in resubmitMilestone:", error);
       toast({
@@ -1461,10 +1473,9 @@ export default function FreelancerPage() {
       setSelectedResubmitEscrow(null);
       setSelectedResubmitMilestone(null);
 
-      // If transaction was sent, FORCE RELOAD IMMEDIATELY to check status
+      // If transaction was sent, refresh escrows to check status
       if (txHash) {
-        console.log("FORCING RELOAD - error but txHash exists:", txHash);
-        window.location.reload();
+        fetchFreelancerEscrows().catch(console.error);
       }
     } finally {
       setSubmittingMilestone(null);
@@ -1550,13 +1561,8 @@ export default function FreelancerPage() {
           })
         );
 
-        // Refresh escrows
+        // Refresh escrows to update UI
         await fetchFreelancerEscrows();
-
-        // Reload page after a delay to ensure all data is updated
-        setTimeout(() => {
-          window.location.reload();
-        }, 3000);
       } else {
         throw new Error("Transaction failed on blockchain");
       }

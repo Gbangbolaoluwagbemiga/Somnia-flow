@@ -1560,11 +1560,25 @@ export default function DashboardPage() {
         description: "Waiting for blockchain confirmation...",
       });
 
+      // Check immediately first (transaction might be instant), then poll
       let receipt;
       let attempts = 0;
       const maxAttempts = 30;
+      const pollInterval = 1000; // Check every 1 second
 
-      while (attempts < maxAttempts) {
+      // First check immediately (no delay)
+      try {
+        receipt = await window.ethereum.request({
+          method: "eth_getTransactionReceipt",
+          params: [txHash],
+        });
+      } catch (error) {}
+
+      // If not found immediately, poll with shorter intervals
+      while (!receipt && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        attempts++;
+
         try {
           receipt = await window.ethereum.request({
             method: "eth_getTransactionReceipt",
@@ -1572,11 +1586,15 @@ export default function DashboardPage() {
           });
           if (receipt) break;
         } catch (error) {}
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        attempts++;
       }
 
-      if (receipt && receipt.status === "0x1") {
+      const isSuccess =
+        receipt &&
+        (receipt.status === "0x1" ||
+          receipt.status === "0x01" ||
+          receipt.status === 1);
+
+      if (isSuccess) {
         toast({
           title: "Milestone Disputed",
           description: "A dispute has been opened. Reloading dashboard...",
@@ -1601,10 +1619,8 @@ export default function DashboardPage() {
 
         setSubmittingMilestone(null);
 
-        // Reload page after a short delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        // Reload page immediately
+        window.location.reload();
       } else {
         // No receipt or failed - reload anyway if we have txHash
         if (txHash) {
@@ -1613,9 +1629,7 @@ export default function DashboardPage() {
             description: "Reloading dashboard...",
           });
           setSubmittingMilestone(null);
-          setTimeout(() => {
-            window.location.reload();
-          }, 3000);
+          window.location.reload();
         } else {
           throw new Error("Transaction failed");
         }
@@ -1807,11 +1821,25 @@ export default function DashboardPage() {
         description: "Waiting for blockchain confirmation...",
       });
 
+      // Check immediately first (transaction might be instant), then poll
       let receipt;
       let attempts = 0;
-      const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
+      const maxAttempts = 30;
+      const pollInterval = 1000; // Check every 1 second
 
-      while (attempts < maxAttempts) {
+      // First check immediately (no delay)
+      try {
+        receipt = await window.ethereum.request({
+          method: "eth_getTransactionReceipt",
+          params: [txHash],
+        });
+      } catch (error) {}
+
+      // If not found immediately, poll with shorter intervals
+      while (!receipt && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        attempts++;
+
         try {
           receipt = await window.ethereum.request({
             method: "eth_getTransactionReceipt",
@@ -1819,17 +1847,26 @@ export default function DashboardPage() {
           });
           if (receipt) break;
         } catch (error) {}
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        attempts++;
       }
 
       // If we got a receipt and it failed, show error immediately
-      if (receipt && receipt.status !== "0x1") {
+      if (
+        receipt &&
+        receipt.status !== "0x1" &&
+        receipt.status !== "0x01" &&
+        receipt.status !== 1
+      ) {
         throw new Error("Transaction failed on blockchain");
       }
 
-      // If we have a receipt and it succeeded, reload immediately
-      if (receipt && receipt.status === "0x1") {
+      // Check if transaction was successful
+      const isSuccess =
+        receipt &&
+        (receipt.status === "0x1" ||
+          receipt.status === "0x01" ||
+          receipt.status === 1);
+
+      if (isSuccess) {
         toast({
           title: "Milestone Approved!",
           description: "Payment sent. Reloading dashboard...",
@@ -1838,12 +1875,10 @@ export default function DashboardPage() {
         // Close modal by clearing submitting state
         setSubmittingMilestone(null);
 
-        // Reload page after a short delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        // Reload page immediately
+        window.location.reload();
       } else {
-        // No receipt yet, but MetaMask confirmed - reload anyway after delay
+        // No receipt yet, but MetaMask confirmed - reload anyway
         // The transaction is confirmed, just our polling didn't catch it
         toast({
           title: "Transaction Confirmed",
@@ -1851,7 +1886,8 @@ export default function DashboardPage() {
         });
         setSubmittingMilestone(null);
 
-        // Reload after delay even if we didn't get receipt
+        // Reload immediately even if we didn't get receipt
+        window.location.reload();
         setTimeout(() => {
           window.location.reload();
         }, 3000);
@@ -1928,13 +1964,17 @@ export default function DashboardPage() {
           description: "Reloading dashboard...",
         });
         setSubmittingMilestone(null);
-        setTimeout(() => {
-          window.location.reload();
-        }, 3000);
+        window.location.reload();
         return;
       }
 
-      if (receipt.status === "0x1") {
+      const isSuccess =
+        receipt &&
+        (receipt.status === "0x1" ||
+          receipt.status === "0x01" ||
+          receipt.status === 1);
+
+      if (isSuccess) {
         // Transaction confirmed - now show success toast
         toast({
           title: "Milestone Rejected",
@@ -1962,10 +2002,8 @@ export default function DashboardPage() {
         // Close modal by clearing submitting state
         setSubmittingMilestone(null);
 
-        // Reload page after a short delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        // Reload page immediately
+        window.location.reload();
       } else {
         throw new Error("Transaction failed on blockchain");
       }
