@@ -1644,6 +1644,23 @@ export default function DashboardPage() {
 
       // Check if transaction succeeded
       if (receipt && receipt.status === "0x1") {
+        // Get escrow data for notification
+        const escrow = escrows.find((e) => e.id === escrowId);
+        
+        // Send notification to freelancer
+        if (escrow) {
+          const freelancerAddress = escrow.beneficiary;
+          addCrossWalletNotification(
+            createMilestoneNotification("disputed", escrowId, 0, {
+              clientName:
+                wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+              projectTitle: escrow.projectDescription || `Project #${escrowId}`,
+            }),
+            wallet.address || undefined, // Client address
+            freelancerAddress // Freelancer address
+          );
+        }
+
         // Success - show toast and close modal
         toast({
           title: "Dispute Opened",

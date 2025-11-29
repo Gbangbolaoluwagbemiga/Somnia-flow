@@ -181,7 +181,7 @@ export function EscrowCard({
                     >
                       {milestone.status}
                     </Badge>
-                    {milestone.status === "pending" && (
+                    {milestone.status === "pending" && escrow.status !== "disputed" && (
                       <Button
                         size="sm"
                         onClick={() => onSubmitMilestone(escrow.id, idx)}
