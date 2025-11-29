@@ -255,10 +255,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           CONTRACTS.SECUREFLOW_ESCROW,
           SECUREFLOW_ABI
         );
-        if (!contract) return;
+        if (!contract) {
+          return;
+        }
 
         const totalEscrows = await contract.call("nextEscrowId");
         const total = Number(totalEscrows);
+
         const escrows: string[] = [];
         const metadata: Record<
           string,
@@ -283,6 +286,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               };
             }
           } catch (error) {
+            // Silently continue for individual escrow errors
             continue;
           }
         }
@@ -659,23 +663,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   // Subscribe to milestone submissions for client-owned escrows
   useEffect(() => {
-    console.log("[Milestone Submission Subscription] Setup check:", {
-      walletConnected: wallet.isConnected,
-      walletAddress: wallet.address,
-      hasSubscribeFunction: !!subscribeToMilestoneSubmissions,
-      clientEscrowIds: clientEscrowIds,
-      clientEscrowIdsLength: clientEscrowIds.length,
-    });
-
     if (
       !wallet.isConnected ||
       !wallet.address ||
       !subscribeToMilestoneSubmissions ||
       clientEscrowIds.length === 0
     ) {
-      console.log(
-        "[Milestone Submission Subscription] Skipping subscription - conditions not met"
-      );
       Object.values(milestoneSubmissionSubscriptions.current).forEach(
         (unsubscribe) => {
           try {
@@ -696,11 +689,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const activeSubscriptions = milestoneSubmissionSubscriptions.current;
     const escrowIdSet = new Set(clientEscrowIds);
 
-    console.log(
-      `[Milestone Submission Subscription] Setting up subscriptions for ${clientEscrowIds.length} escrows:`,
-      clientEscrowIds
-    );
-
     // Unsubscribe from escrows no longer relevant
     Object.keys(activeSubscriptions).forEach((escrowId) => {
       if (!escrowIdSet.has(escrowId)) {
@@ -716,63 +704,35 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     // Subscribe to new escrow IDs
     clientEscrowIds.forEach((escrowId) => {
       if (activeSubscriptions[escrowId]) {
-        console.log(
-          `[Milestone Submission Subscription] Already subscribed to escrow ${escrowId}`
-        );
         return;
       }
 
-      console.log(
-        `[Milestone Submission Subscription] Subscribing to escrow ${escrowId}`
-      );
-
       subscribeToMilestoneSubmissions(escrowId, (data) => {
         try {
-          console.log(
-            `[Milestone Submission] Event received for escrow ${escrowId}:`,
-            data
-          );
-
           const fields = data.data || data;
-          console.log(
-            `[Milestone Submission] Parsed fields for escrow ${escrowId}:`,
-            fields
-          );
-
           const milestoneIndexField = fields.find(
             (f: any) => f.name === "milestoneIndex"
           );
-          const beneficiaryField = fields.find(
-            (f: any) => f.name === "beneficiary"
+          const submitterField = fields.find(
+            (f: any) => f.name === "submitter"
           );
+          const statusField = fields.find((f: any) => f.name === "status");
           const timestampField = fields.find(
-            (f: any) => f.name === "submittedAt"
+            (f: any) => f.name === "timestamp" || f.name === "submittedAt"
           );
 
-          console.log(
-            `[Milestone Submission] Extracted fields for escrow ${escrowId}:`,
-            {
-              milestoneIndexField,
-              beneficiaryField,
-              timestampField,
-            }
-          );
+          // Only process submission events (status === 1)
+          const status = Number(statusField?.value || 0);
+          if (status !== 1) {
+            return;
+          }
 
           const milestoneIndex = Number(milestoneIndexField?.value || 0);
           const eventKey = `${escrowId}-${milestoneIndex}-${
             timestampField?.value || Date.now()
           }`;
 
-          console.log(
-            `[Milestone Submission] Event key for escrow ${escrowId}:`,
-            eventKey
-          );
-
           if (processedMilestoneSubmissions.current.has(eventKey)) {
-            console.log(
-              `[Milestone Submission] Event already processed, skipping:`,
-              eventKey
-            );
             return;
           }
           processedMilestoneSubmissions.current.add(eventKey);
@@ -780,68 +740,42 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const metadata = escrowMetadata[escrowId] || {
             title: `Project #${escrowId}`,
           };
-          const freelancerAddress = beneficiaryField?.value?.toString() || "";
+          const freelancerAddress = submitterField?.value?.toString() || "";
           const freelancerName = freelancerAddress
             ? formatAddress(freelancerAddress)
             : "Freelancer";
-          const clientAddress = metadata.client;
 
-          console.log(
-            `[Milestone Submission] Addresses for escrow ${escrowId}:`,
-            {
-              metadata,
-              freelancerAddress,
-              freelancerName,
-              clientAddress,
-              escrowMetadata: escrowMetadata[escrowId],
-            }
-          );
+          // Since we're only subscribing to escrows where the current user is the client,
+          // we can use wallet.address as the client address
+          const clientAddress = wallet.address || metadata.client;
 
           // Only notify the client, not the freelancer who submitted
-          // Verify current user is the client (recipient), not the freelancer (sender)
           const currentUserAddress = wallet.address?.toLowerCase();
+          const clientAddressLower = clientAddress?.toLowerCase();
+          const freelancerAddressLower = freelancerAddress?.toLowerCase();
+
+          // Since we're subscribed to clientEscrowIds, the current user is always the client
           const isCurrentUserClient =
-            clientAddress?.toLowerCase() === currentUserAddress;
+            !!currentUserAddress &&
+            !!clientAddressLower &&
+            clientAddressLower === currentUserAddress;
           const isCurrentUserFreelancer =
-            freelancerAddress?.toLowerCase() === currentUserAddress;
+            freelancerAddressLower === currentUserAddress;
 
-          console.log(
-            `[Milestone Submission] User verification for escrow ${escrowId}:`,
-            {
-              currentUserAddress,
-              clientAddress,
-              freelancerAddress,
-              isCurrentUserClient,
-              isCurrentUserFreelancer,
-              clientAddressMatch:
-                clientAddress?.toLowerCase() === currentUserAddress,
-              freelancerAddressMatch:
-                freelancerAddress?.toLowerCase() === currentUserAddress,
-            }
-          );
-
+          // Notify if:
+          // 1. We have a client address (current user)
+          // 2. Client and freelancer are different
+          // 3. Current user is the client (always true for clientEscrowIds subscriptions)
+          // 4. Current user is NOT the freelancer
           const shouldNotify =
             clientAddress &&
-            clientAddress.toLowerCase() !== freelancerAddress.toLowerCase() &&
+            clientAddressLower &&
+            freelancerAddressLower &&
+            clientAddressLower !== freelancerAddressLower &&
             isCurrentUserClient &&
             !isCurrentUserFreelancer;
 
-          console.log(
-            `[Milestone Submission] Notification decision for escrow ${escrowId}:`,
-            {
-              shouldNotify,
-              hasClientAddress: !!clientAddress,
-              addressesDifferent:
-                clientAddress?.toLowerCase() !== freelancerAddress?.toLowerCase(),
-              isCurrentUserClient,
-              isCurrentUserFreelancer,
-            }
-          );
-
           if (shouldNotify) {
-            console.log(
-              `[Milestone Submission] ✅ Sending notification for escrow ${escrowId}, milestone ${milestoneIndex}`
-            );
             addNotification(
               createMilestoneNotification(
                 "submitted",
@@ -862,10 +796,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                 milestoneIndex + 1
               } for ${metadata.title}`,
             });
-          } else {
-            console.log(
-              `[Milestone Submission] ❌ NOT sending notification for escrow ${escrowId} - conditions not met`
-            );
           }
         } catch (error) {
           console.error(
@@ -895,7 +825,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     wallet.isConnected,
     wallet.address,
     subscribeToMilestoneSubmissions,
-    clientEscrowIds.join(","),
+    clientEscrowIds.join(","), // This will trigger re-run when escrows are fetched
     JSON.stringify(escrowMetadata),
   ]);
 
@@ -1084,9 +1014,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const milestoneIndexField = fields.find(
             (f: any) => f.name === "milestoneIndex"
           );
-          const reasonField = fields.find((f: any) => f.name === "reason");
+          const reasonField = fields.find(
+            (f: any) => f.name === "reason" || f.name === "description"
+          );
           const timestampField = fields.find(
-            (f: any) => f.name === "rejectedAt"
+            (f: any) => f.name === "timestamp" || f.name === "rejectedAt"
           );
 
           const milestoneIndex = Number(milestoneIndexField?.value || 0);
@@ -1103,24 +1035,65 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const metadata = escrowMetadata[escrowId] || {
             title: `Project #${escrowId}`,
           };
-          const freelancerAddress = metadata.freelancer;
+
+          // Since we're only subscribing to escrows where the current user is the freelancer,
+          // we can use wallet.address as the freelancer address
+          const freelancerAddress = wallet.address || metadata.freelancer;
           const clientAddress = metadata.client;
+
+          console.log(
+            `[Milestone Rejection] Addresses for escrow ${escrowId}:`,
+            {
+              metadata,
+              freelancerAddress,
+              clientAddress,
+              walletAddress: wallet.address,
+              escrowMetadata: escrowMetadata[escrowId],
+            }
+          );
 
           // Only notify the freelancer, not the client who rejected
           // Verify current user is the freelancer (recipient), not the client (sender)
           const currentUserAddress = wallet.address?.toLowerCase();
-          const isCurrentUserFreelancer =
-            freelancerAddress?.toLowerCase() === currentUserAddress;
-          const isCurrentUserClient =
-            clientAddress?.toLowerCase() === currentUserAddress;
+          const freelancerAddressLower = freelancerAddress?.toLowerCase();
+          const clientAddressLower = clientAddress?.toLowerCase();
 
+          // Since we're subscribed to freelancerEscrowIds, the current user is always the freelancer
+          const isCurrentUserFreelancer =
+            !!currentUserAddress &&
+            !!freelancerAddressLower &&
+            freelancerAddressLower === currentUserAddress;
+          const isCurrentUserClient = clientAddressLower === currentUserAddress;
+
+          console.log(
+            `[Milestone Rejection] User verification for escrow ${escrowId}:`,
+            {
+              currentUserAddress,
+              freelancerAddress,
+              clientAddress,
+              isCurrentUserFreelancer,
+              isCurrentUserClient,
+              addressesDifferent: freelancerAddressLower !== clientAddressLower,
+            }
+          );
+
+          // Notify if:
+          // 1. We have a freelancer address (current user)
+          // 2. Client and freelancer are different
+          // 3. Current user is the freelancer (always true for freelancerEscrowIds subscriptions)
+          // 4. Current user is NOT the client
           if (
             freelancerAddress &&
+            freelancerAddressLower &&
             clientAddress &&
-            freelancerAddress.toLowerCase() !== clientAddress.toLowerCase() &&
+            clientAddressLower &&
+            freelancerAddressLower !== clientAddressLower &&
             isCurrentUserFreelancer &&
             !isCurrentUserClient
           ) {
+            console.log(
+              `[Milestone Rejection] ✅ Sending notification for escrow ${escrowId}, milestone ${milestoneIndex}`
+            );
             addNotification(
               createMilestoneNotification(
                 "rejected",
@@ -1142,6 +1115,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               }`,
               variant: "destructive",
             });
+          } else {
+            console.log(
+              `[Milestone Rejection] ❌ NOT sending notification for escrow ${escrowId} - conditions not met`
+            );
           }
         } catch (error) {
           console.error("Error processing milestone rejection event:", error);

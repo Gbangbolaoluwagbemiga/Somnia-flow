@@ -80,7 +80,9 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
         const chainId = wallet.chainId;
         const chainIdStr = chainId?.toString();
         const isSomniaNetwork =
-          chainId === 50312 || chainIdStr === "0xC4A8" || chainIdStr === "50312";
+          chainId === 50312 ||
+          chainIdStr === "0xC4A8" ||
+          chainIdStr === "50312";
 
         if (isSomniaNetwork || !wallet.isConnected) {
           // Initialize with public client for reading/subscribing
@@ -368,8 +370,10 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+        // Subscribe to MILESTONE_UPDATED events and filter for status === 1 (submitted/resubmitted)
+        // The publisher emits MILESTONE_UPDATED for all milestone updates, with status indicating the type
         const subscription = await sdk.streams.subscribe({
-          somniaStreamsEventId: EVENT_SCHEMA_IDS.MILESTONE_SUBMITTED,
+          somniaStreamsEventId: EVENT_SCHEMA_IDS.MILESTONE_UPDATED,
           ethCalls: [],
           // context: "topic1", // Removed to allow all events and filter client-side
           onData: (data) => {
@@ -379,14 +383,24 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
               const escrowIdField = fields.find(
                 (f: any) => f.name === "escrowId"
               );
+              const statusField = fields.find((f: any) => f.name === "status");
+
               // Convert escrowId to string for comparison
               const eventEscrowId = escrowIdField?.value?.toString();
-              if (eventEscrowId === escrowId || eventEscrowId === escrowId.toString()) {
+              const status = Number(statusField?.value || 0);
+
+              // Only process submission/resubmission events (status === 1)
+              if (
+                (eventEscrowId === escrowId ||
+                  eventEscrowId === escrowId.toString()) &&
+                status === 1
+              ) {
                 onData(item);
               }
             });
           },
-          onError: (error) => console.error("Milestone submission subscription error:", error),
+          onError: (error) =>
+            console.error("Milestone submission subscription error:", error),
           onlyPushChanges: true,
         });
 
@@ -423,12 +437,16 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
                 (f: any) => f.name === "escrowId"
               );
               const eventEscrowId = escrowIdField?.value?.toString();
-              if (eventEscrowId === escrowId || eventEscrowId === escrowId.toString()) {
+              if (
+                eventEscrowId === escrowId ||
+                eventEscrowId === escrowId.toString()
+              ) {
                 onData(item);
               }
             });
           },
-          onError: (error) => console.error("Milestone approval subscription error:", error),
+          onError: (error) =>
+            console.error("Milestone approval subscription error:", error),
           onlyPushChanges: true,
         });
 
@@ -465,12 +483,16 @@ export function SomniaStreamsProvider({ children }: { children: ReactNode }) {
                 (f: any) => f.name === "escrowId"
               );
               const eventEscrowId = escrowIdField?.value?.toString();
-              if (eventEscrowId === escrowId || eventEscrowId === escrowId.toString()) {
+              if (
+                eventEscrowId === escrowId ||
+                eventEscrowId === escrowId.toString()
+              ) {
                 onData(item);
               }
             });
           },
-          onError: (error) => console.error("Milestone rejection subscription error:", error),
+          onError: (error) =>
+            console.error("Milestone rejection subscription error:", error),
           onlyPushChanges: true,
         });
 

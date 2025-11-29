@@ -1270,6 +1270,11 @@ export default function FreelancerPage() {
 
         // Dispatch event to notify other components
         window.dispatchEvent(new CustomEvent("milestoneSubmitted"));
+
+        // Reload page after a delay to ensure all data is updated
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
       } else {
         throw new Error("Transaction failed on blockchain");
       }
@@ -1298,6 +1303,7 @@ export default function FreelancerPage() {
       return;
     }
 
+    let txHash: string | null = null;
     try {
       setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
       const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
@@ -1307,12 +1313,193 @@ export default function FreelancerPage() {
         description: "Submitting transaction to resubmit your milestone",
       });
 
-      const txHash = await contract.send(
+      txHash = await contract.send(
         "resubmitMilestone",
         "no-value",
         escrowId,
         milestoneIndex,
         description
+      );
+
+      console.log("Resubmit transaction sent, hash:", txHash);
+
+      // Wait for transaction confirmation
+      toast({
+        title: "Transaction submitted",
+        description: "Waiting for blockchain confirmation...",
+      });
+
+      // Wait for transaction to be mined using polling
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 60; // 60 attempts * 2 seconds = 2 minute timeout
+
+      console.log("Waiting for transaction receipt, hash:", txHash);
+
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
+
+          if (receipt) {
+            console.log("Transaction receipt received:", receipt);
+            break;
+          }
+        } catch (error) {
+          console.error("Error checking transaction receipt:", error);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+        attempts++;
+      }
+
+      if (!receipt) {
+        console.error(
+          "Transaction receipt timeout after",
+          attempts,
+          "attempts"
+        );
+        toast({
+          title: "Transaction timeout",
+          description:
+            "Transaction is taking longer than expected. Reloading page...",
+          variant: "destructive",
+        });
+        // Clear form and close dialog
+        setResubmitDescription("");
+        setShowResubmitDialog(false);
+        setSelectedResubmitEscrow(null);
+        setSelectedResubmitMilestone(null);
+        // FORCE RELOAD IMMEDIATELY
+        console.log("FORCING RELOAD - receipt timeout");
+        window.location.reload();
+        return;
+      }
+
+      // Check if transaction was successful
+      const isSuccess =
+        receipt.status === "0x1" ||
+        receipt.status === "0x01" ||
+        receipt.status === 1;
+      console.log(
+        "Transaction status:",
+        receipt.status,
+        "isSuccess:",
+        isSuccess
+      );
+
+      // Reload immediately after transaction is confirmed (success or failure)
+      // Clear form and close dialog first
+      setResubmitDescription("");
+      setShowResubmitDialog(false);
+      setSelectedResubmitEscrow(null);
+      setSelectedResubmitMilestone(null);
+
+      if (isSuccess) {
+        toast({
+          title: "Milestone resubmitted!",
+          description: "Your milestone has been resubmitted for client review",
+        });
+
+        // Get client address from escrow data
+        const escrow = escrows.find((e) => e.id === escrowId);
+        const clientAddress = escrow?.payer;
+
+        // Add cross-wallet notification for milestone resubmission - notify ONLY the CLIENT
+        if (clientAddress) {
+          // Don't await - just fire and forget, reload will happen anyway
+          try {
+            addCrossWalletNotification(
+              createMilestoneNotification(
+                "submitted",
+                escrowId,
+                milestoneIndex,
+                {
+                  freelancerName:
+                    wallet.address!.slice(0, 6) +
+                    "..." +
+                    wallet.address!.slice(-4),
+                  projectTitle:
+                    escrow?.projectTitle ||
+                    escrow?.projectDescription ||
+                    `Project #${escrowId}`,
+                }
+              ),
+              clientAddress, // Notify ONLY the client
+              undefined // No freelancer address (freelancer is current user)
+            );
+          } catch (e) {
+            // Ignore notification errors
+          }
+        }
+      } else {
+        toast({
+          title: "Transaction failed",
+          description: "Transaction failed on blockchain. Reloading page...",
+          variant: "destructive",
+        });
+      }
+
+      // FORCE RELOAD - no delays, no conditions
+      console.log("FORCING RELOAD NOW - transaction confirmed");
+      window.location.reload();
+    } catch (error) {
+      console.error("Error in resubmitMilestone:", error);
+      toast({
+        title: "Failed to resubmit milestone",
+        description: txHash
+          ? "Error occurred but transaction was sent. Reloading to check status..."
+          : "Could not resubmit your milestone",
+        variant: "destructive",
+      });
+
+      // Clear form and close dialog
+      setResubmitDescription("");
+      setShowResubmitDialog(false);
+      setSelectedResubmitEscrow(null);
+      setSelectedResubmitMilestone(null);
+
+      // If transaction was sent, FORCE RELOAD IMMEDIATELY to check status
+      if (txHash) {
+        console.log("FORCING RELOAD - error but txHash exists:", txHash);
+        window.location.reload();
+      }
+    } finally {
+      setSubmittingMilestone(null);
+    }
+  };
+
+  const openDispute = async (
+    escrowId: string,
+    milestoneIndex: number,
+    reason: string
+  ) => {
+    if (!reason.trim()) {
+      toast({
+        title: "Reason required",
+        description: "Please provide a reason for the dispute",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
+      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
+
+      toast({
+        title: "Opening dispute...",
+        description: "Submitting transaction to open dispute",
+      });
+
+      const txHash = await contract.send(
+        "disputeMilestone",
+        "no-value",
+        escrowId,
+        milestoneIndex,
+        reason
       );
 
       // Wait for transaction confirmation
@@ -1350,123 +1537,29 @@ export default function FreelancerPage() {
 
       if (receipt.status === "0x1") {
         toast({
-          title: "Milestone resubmitted!",
-          description: "Your milestone has been resubmitted for client review",
+          title: "Dispute opened!",
+          description: "A dispute has been opened for this milestone",
         });
 
-        // Get client address from escrow data
-        const escrow = escrows.find((e) => e.id === escrowId);
-        const clientAddress = escrow?.payer;
-
-        // Add cross-wallet notification for milestone resubmission - notify ONLY the CLIENT
-        // This ensures the notification is stored in the client's localStorage
-        if (clientAddress) {
-          addCrossWalletNotification(
-            createMilestoneNotification("submitted", escrowId, milestoneIndex, {
-              freelancerName:
-                wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-              projectTitle:
-                escrow?.projectTitle ||
-                escrow?.projectDescription ||
-                `Project #${escrowId}`,
-            }),
-            clientAddress, // Notify ONLY the client
-            undefined // No freelancer address (freelancer is current user)
-          );
-        }
-
-        // Optimistically update UI immediately
-        setEscrows((prevEscrows) =>
-          prevEscrows.map((e) => {
-            if (e.id === escrowId) {
-              const updatedMilestones = [...e.milestones];
-              if (updatedMilestones[milestoneIndex]) {
-                updatedMilestones[milestoneIndex] = {
-                  ...updatedMilestones[milestoneIndex],
-                  status: "submitted" as const,
-                  submittedAt: Date.now(),
-                  // Clear rejection reason
-                  rejectionReason: undefined,
-                };
-              }
-              return {
-                ...e,
-                milestones: updatedMilestones,
-              };
-            }
-            return e;
+        // Add notification for dispute opening
+        addNotification(
+          createMilestoneNotification("disputed", escrowId, milestoneIndex, {
+            reason: reason,
+            freelancerName:
+              wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
           })
         );
 
-        // Clear form and close dialog
-        setResubmitDescription("");
-        setShowResubmitDialog(false);
-        setSelectedResubmitEscrow(null);
-        setSelectedResubmitMilestone(null);
+        // Refresh escrows
+        await fetchFreelancerEscrows();
 
-        // Refresh escrows in background (non-blocking)
-        fetchFreelancerEscrows().catch(console.error);
+        // Reload page after a delay to ensure all data is updated
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
       } else {
         throw new Error("Transaction failed on blockchain");
       }
-    } catch (error) {
-      toast({
-        title: "Failed to resubmit milestone",
-        description: "Could not resubmit your milestone",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmittingMilestone(null);
-    }
-  };
-
-  const openDispute = async (
-    escrowId: string,
-    milestoneIndex: number,
-    reason: string
-  ) => {
-    if (!reason.trim()) {
-      toast({
-        title: "Reason required",
-        description: "Please provide a reason for the dispute",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW, SECUREFLOW_ABI);
-
-      toast({
-        title: "Opening dispute...",
-        description: "Submitting transaction to open dispute",
-      });
-
-      const txHash = await contract.send(
-        "disputeMilestone",
-        "no-value",
-        escrowId,
-        milestoneIndex,
-        reason
-      );
-
-      toast({
-        title: "Dispute opened!",
-        description: "A dispute has been opened for this milestone",
-      });
-
-      // Add notification for dispute opening
-      addNotification(
-        createMilestoneNotification("disputed", escrowId, milestoneIndex, {
-          reason: reason,
-          freelancerName:
-            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-        })
-      );
-
-      // Refresh escrows
-      await fetchFreelancerEscrows();
     } catch (error) {
       toast({
         title: "Failed to open dispute",
@@ -2629,8 +2722,8 @@ export default function FreelancerPage() {
 
         {/* Resubmit Dialog */}
         {showResubmitDialog && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md mx-4">
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4 shadow-2xl">
               <CardHeader>
                 <CardTitle>Resubmit Milestone</CardTitle>
                 <CardDescription>

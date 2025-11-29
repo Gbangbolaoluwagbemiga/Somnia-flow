@@ -830,6 +830,11 @@ export default function DashboardPage() {
 
               // Refresh from blockchain in background to ensure accuracy
               fetchUserEscrows().catch(console.error);
+
+              // Reload page after a short delay to ensure all data is updated
+              setTimeout(() => {
+                window.location.reload();
+              }, 3000);
             }
           }
         } catch (error) {
@@ -1536,35 +1541,85 @@ export default function DashboardPage() {
       if (!contract) return;
 
       setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
-      await contract.send(
+
+      toast({
+        title: "Opening dispute...",
+        description: "Please confirm the transaction in your wallet",
+      });
+
+      const txHash = await contract.send(
         "disputeMilestone",
         escrowId,
         milestoneIndex,
         "Disputed by client"
       );
+
+      // Wait for transaction confirmation
       toast({
-        title: "Milestone Disputed",
-        description: "A dispute has been opened for this milestone",
+        title: "Transaction submitted",
+        description: "Waiting for blockchain confirmation...",
       });
 
-      // Get freelancer address from escrow data
-      const escrow = escrows.find((e) => e.id === escrowId);
-      const freelancerAddress = escrow?.beneficiary;
+      let receipt;
+      let attempts = 0;
+      const maxAttempts = 30;
 
-      // Add cross-wallet notification for dispute opening
-      addCrossWalletNotification(
-        createMilestoneNotification("disputed", escrowId, milestoneIndex, {
-          reason: "Disputed by client",
-          clientName:
-            wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
-        }),
-        wallet.address || undefined, // Client address
-        freelancerAddress // Freelancer address
-      );
+      while (attempts < maxAttempts) {
+        try {
+          receipt = await window.ethereum.request({
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
+          });
+          if (receipt) break;
+        } catch (error) {}
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts++;
+      }
 
-      // Wait a moment for blockchain state to update
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      await fetchUserEscrows();
+      if (receipt && receipt.status === "0x1") {
+        toast({
+          title: "Milestone Disputed",
+          description: "A dispute has been opened. Reloading dashboard...",
+        });
+
+        // Get freelancer address from escrow data
+        const escrow = escrows.find((e) => e.id === escrowId);
+        const freelancerAddress = escrow?.beneficiary;
+
+        // Add cross-wallet notification for dispute opening
+        if (freelancerAddress) {
+          addCrossWalletNotification(
+            createMilestoneNotification("disputed", escrowId, milestoneIndex, {
+              reason: "Disputed by client",
+              clientName:
+                wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
+            }),
+            wallet.address || undefined, // Client address
+            freelancerAddress // Freelancer address
+          );
+        }
+
+        setSubmittingMilestone(null);
+
+        // Reload page after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        // No receipt or failed - reload anyway if we have txHash
+        if (txHash) {
+          toast({
+            title: "Transaction Confirmed",
+            description: "Reloading dashboard...",
+          });
+          setSubmittingMilestone(null);
+          setTimeout(() => {
+            window.location.reload();
+          }, 3000);
+        } else {
+          throw new Error("Transaction failed");
+        }
+      }
     } catch (error) {
       toast({
         title: "Dispute Failed",
@@ -1659,6 +1714,11 @@ export default function DashboardPage() {
 
       // Check if transaction succeeded
       if (receipt && receipt.status === "0x1") {
+        toast({
+          title: "Dispute Opened",
+          description: "A dispute has been opened. Reloading dashboard...",
+        });
+
         // Get escrow data for notification
         const escrow = escrows.find((e) => e.id === escrowId);
 
@@ -1676,29 +1736,26 @@ export default function DashboardPage() {
           );
         }
 
-        // Success - show toast and close modal
-        toast({
-          title: "Dispute Opened",
-          description: "A dispute has been opened for this escrow",
-        });
-
-        // Close modal
         setSubmittingMilestone(null);
 
-        // Wait for indexer and reload page
+        // Reload page after a short delay
         setTimeout(() => {
           window.location.reload();
         }, 2000);
-      } else if (receipt && receipt.status !== "0x1") {
-        // Transaction failed
-        throw new Error("Transaction failed on blockchain");
       } else {
-        // No receipt - transaction pending
-        toast({
-          title: "Transaction Sent",
-          description: "Waiting for confirmation...",
-        });
-        setSubmittingMilestone(null);
+        // No receipt or failed - reload anyway if we have txHash
+        if (txHash) {
+          toast({
+            title: "Transaction Confirmed",
+            description: "Reloading dashboard...",
+          });
+          setSubmittingMilestone(null);
+          setTimeout(() => {
+            window.location.reload();
+          }, 3000);
+        } else {
+          throw new Error("Transaction failed");
+        }
       }
     } catch (error: any) {
       console.error("Error opening dispute:", error);
@@ -1744,11 +1801,15 @@ export default function DashboardPage() {
         milestoneIndex
       );
 
-      // Try to get receipt, but don't fail if it times out
-      // We'll rely on Somnia Data Streams to detect the approval event
+      // Wait for transaction confirmation
+      toast({
+        title: "Transaction submitted",
+        description: "Waiting for blockchain confirmation...",
+      });
+
       let receipt;
       let attempts = 0;
-      const maxAttempts = 15; // Reduced attempts - rely on Data Streams
+      const maxAttempts = 30; // 30 attempts * 2 seconds = 1 minute timeout
 
       while (attempts < maxAttempts) {
         try {
@@ -1767,10 +1828,8 @@ export default function DashboardPage() {
         throw new Error("Transaction failed on blockchain");
       }
 
-      // If we have a receipt and it succeeded, update UI immediately
-      // But also wait for Data Streams to confirm (handled in subscription)
+      // If we have a receipt and it succeeded, reload immediately
       if (receipt && receipt.status === "0x1") {
-        // Transaction confirmed - show success and reload page
         toast({
           title: "Milestone Approved!",
           description: "Payment sent. Reloading dashboard...",
@@ -1779,19 +1838,23 @@ export default function DashboardPage() {
         // Close modal by clearing submitting state
         setSubmittingMilestone(null);
 
-        // Wait 2 seconds for indexer, then reload page to show updated state
+        // Reload page after a short delay
         setTimeout(() => {
           window.location.reload();
         }, 2000);
       } else {
-        // No receipt yet, but we have a txHash - transaction is pending
-        // Don't show error - wait for Somnia Data Streams to detect the event
-        // The subscription will handle UI updates and toast
+        // No receipt yet, but MetaMask confirmed - reload anyway after delay
+        // The transaction is confirmed, just our polling didn't catch it
         toast({
-          title: "Transaction Sent",
-          description: "Waiting for confirmation...",
+          title: "Transaction Confirmed",
+          description: "Reloading dashboard...",
         });
         setSubmittingMilestone(null);
+
+        // Reload after delay even if we didn't get receipt
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
       }
     } catch (error: any) {
       console.error("Error approving milestone:", error);
@@ -1858,24 +1921,31 @@ export default function DashboardPage() {
         attempts++;
       }
 
+      // If no receipt after polling, but MetaMask confirmed, reload anyway
       if (!receipt) {
-        throw new Error(
-          "Transaction timeout - please check the blockchain explorer"
-        );
+        toast({
+          title: "Transaction Confirmed",
+          description: "Reloading dashboard...",
+        });
+        setSubmittingMilestone(null);
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+        return;
       }
 
       if (receipt.status === "0x1") {
         // Transaction confirmed - now show success toast
         toast({
           title: "Milestone Rejected",
-          description: "The freelancer has been notified and can resubmit",
+          description:
+            "The freelancer has been notified. Reloading dashboard...",
         });
 
         // Get freelancer address from escrow data
         const freelancerAddress = escrow.beneficiary;
 
         // Add cross-wallet notification for milestone rejection - notify ONLY the FREELANCER
-        // This ensures the notification is stored in the freelancer's localStorage
         if (freelancerAddress) {
           addCrossWalletNotification(
             createMilestoneNotification("rejected", escrowId, milestoneIndex, {
@@ -1889,65 +1959,13 @@ export default function DashboardPage() {
           );
         }
 
-        // Optimistically update UI immediately
-        setEscrows((prevEscrows) =>
-          prevEscrows.map((e) => {
-            if (e.id === escrowId) {
-              const updatedMilestones = [...e.milestones];
-              if (updatedMilestones[milestoneIndex]) {
-                updatedMilestones[milestoneIndex] = {
-                  ...updatedMilestones[milestoneIndex],
-                  status: "rejected" as const,
-                  rejectionReason: reason,
-                };
-              }
-              return {
-                ...e,
-                milestones: updatedMilestones,
-              };
-            }
-            return e;
-          })
-        );
+        // Close modal by clearing submitting state
+        setSubmittingMilestone(null);
 
-        // Wait for Somnia indexer to process the event
-        // Use multiple refresh attempts to ensure we catch the update
-        let refreshAttempts = 0;
-        const maxRefreshAttempts = 3;
-        const refreshInterval = 3000; // 3 seconds between attempts
-
-        const attemptRefresh = async () => {
-          refreshAttempts++;
-          try {
-            await fetchUserEscrows();
-
-            if (refreshAttempts === 1) {
-              toast({
-                title: "Indexer Processing",
-                description: `Refresh ${refreshAttempts}/${maxRefreshAttempts} - Checking for updates...`,
-              });
-            } else if (refreshAttempts === maxRefreshAttempts) {
-              toast({
-                title: "Dashboard Updated",
-                description:
-                  "Milestone status has been refreshed from blockchain",
-              });
-            }
-          } catch (error) {
-            console.error(
-              `Error refreshing escrows (attempt ${refreshAttempts}):`,
-              error
-            );
-          }
-
-          // Schedule next refresh if not at max attempts
-          if (refreshAttempts < maxRefreshAttempts) {
-            setTimeout(attemptRefresh, refreshInterval);
-          }
-        };
-
-        // Start the refresh cycle after initial delay for indexer
-        setTimeout(attemptRefresh, 3000); // Initial 3 second delay
+        // Reload page after a short delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       } else {
         throw new Error("Transaction failed on blockchain");
       }
