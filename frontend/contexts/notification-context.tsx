@@ -101,6 +101,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     subscribeToMilestoneSubmissions,
     subscribeToMilestoneApprovals,
     subscribeToMilestoneRejections,
+    subscribeToDisputes,
   } = useSomniaStreams();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -123,11 +124,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const processedMilestoneSubmissions = useRef<Set<string>>(new Set());
   const processedMilestoneApprovals = useRef<Set<string>>(new Set());
   const processedMilestoneRejections = useRef<Set<string>>(new Set());
+  const processedDisputes = useRef<Set<string>>(new Set());
   const applicationSubscriptions = useRef<Record<string, () => void>>({});
   const escrowStatusSubscriptions = useRef<Record<string, () => void>>({});
-  const milestoneSubmissionSubscriptions = useRef<Record<string, () => void>>({});
+  const milestoneSubmissionSubscriptions = useRef<Record<string, () => void>>(
+    {}
+  );
   const milestoneApprovalSubscriptions = useRef<Record<string, () => void>>({});
-  const milestoneRejectionSubscriptions = useRef<Record<string, () => void>>({});
+  const milestoneRejectionSubscriptions = useRef<Record<string, () => void>>(
+    {}
+  );
+  const disputeSubscriptions = useRef<Record<string, () => void>>({});
 
   // Load notifications from localStorage on mount and when wallet changes
   useEffect(() => {
@@ -253,8 +260,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         const totalEscrows = await contract.call("nextEscrowId");
         const total = Number(totalEscrows);
         const escrows: string[] = [];
-        const metadata: Record<string, { title: string; client?: string; freelancer?: string }> =
-          {};
+        const metadata: Record<
+          string,
+          { title: string; client?: string; freelancer?: string }
+        > = {};
         const lowerAddress = wallet.address.toLowerCase();
 
         for (let id = 1; id < total; id++) {
@@ -514,21 +523,41 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             const metadata = escrowMetadata[escrowId] || {
               title: `Project #${escrowId}`,
             };
-            const freelancerName = metadata.freelancer
-              ? formatAddress(metadata.freelancer)
+            const freelancerAddress = metadata.freelancer;
+            const clientAddress = metadata.client;
+            const freelancerName = freelancerAddress
+              ? formatAddress(freelancerAddress)
               : "Freelancer";
 
-            addNotification(
-              createEscrowNotification("work_started", escrowId, {
-                projectTitle: metadata.title,
-                freelancerName,
-              })
-            );
+            // Only notify the client, not the freelancer who started work
+            // Verify current user is the client (recipient), not the freelancer (sender)
+            const currentUserAddress = wallet.address?.toLowerCase();
+            const isCurrentUserClient =
+              clientAddress?.toLowerCase() === currentUserAddress;
+            const isCurrentUserFreelancer =
+              freelancerAddress?.toLowerCase() === currentUserAddress;
 
-            toast({
-              title: "Freelancer Started Work",
-              description: `${freelancerName} has started work on ${metadata.title}`,
-            });
+            if (
+              clientAddress &&
+              freelancerAddress &&
+              clientAddress.toLowerCase() !== freelancerAddress.toLowerCase() &&
+              isCurrentUserClient &&
+              !isCurrentUserFreelancer
+            ) {
+              addNotification(
+                createEscrowNotification("work_started", escrowId, {
+                  projectTitle: metadata.title,
+                  freelancerName,
+                }),
+                [clientAddress],
+                false // Current user is the recipient (client)
+              );
+
+              toast({
+                title: "Freelancer Started Work",
+                description: `${freelancerName} has started work on ${metadata.title}`,
+              });
+            }
           }
         } catch (error) {
           console.error("Error processing escrow status update:", error);
@@ -641,7 +670,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           try {
             unsubscribe();
           } catch (error) {
-            console.error("Error unsubscribing from milestone submissions:", error);
+            console.error(
+              "Error unsubscribing from milestone submissions:",
+              error
+            );
           }
         }
       );
@@ -704,14 +736,31 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const clientAddress = metadata.client;
 
           // Only notify the client, not the freelancer who submitted
-          if (clientAddress && clientAddress.toLowerCase() !== freelancerAddress.toLowerCase()) {
+          // Verify current user is the client (recipient), not the freelancer (sender)
+          const currentUserAddress = wallet.address?.toLowerCase();
+          const isCurrentUserClient =
+            clientAddress?.toLowerCase() === currentUserAddress;
+          const isCurrentUserFreelancer =
+            freelancerAddress?.toLowerCase() === currentUserAddress;
+
+          if (
+            clientAddress &&
+            clientAddress.toLowerCase() !== freelancerAddress.toLowerCase() &&
+            isCurrentUserClient &&
+            !isCurrentUserFreelancer
+          ) {
             addNotification(
-              createMilestoneNotification("submitted", escrowId, milestoneIndex, {
-                projectTitle: metadata.title,
-                freelancerName,
-              }),
+              createMilestoneNotification(
+                "submitted",
+                escrowId,
+                milestoneIndex,
+                {
+                  projectTitle: metadata.title,
+                  freelancerName,
+                }
+              ),
               [clientAddress],
-              true // Skip current user (freelancer)
+              false // Current user is the recipient (client)
             );
 
             toast({
@@ -763,7 +812,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           try {
             unsubscribe();
           } catch (error) {
-            console.error("Error unsubscribing from milestone approvals:", error);
+            console.error(
+              "Error unsubscribing from milestone approvals:",
+              error
+            );
           }
         }
       );
@@ -819,13 +871,31 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const clientAddress = metadata.client;
 
           // Only notify the freelancer, not the client who approved
-          if (freelancerAddress && clientAddress && freelancerAddress.toLowerCase() !== clientAddress.toLowerCase()) {
+          // Verify current user is the freelancer (recipient), not the client (sender)
+          const currentUserAddress = wallet.address?.toLowerCase();
+          const isCurrentUserFreelancer =
+            freelancerAddress?.toLowerCase() === currentUserAddress;
+          const isCurrentUserClient =
+            clientAddress?.toLowerCase() === currentUserAddress;
+
+          if (
+            freelancerAddress &&
+            clientAddress &&
+            freelancerAddress.toLowerCase() !== clientAddress.toLowerCase() &&
+            isCurrentUserFreelancer &&
+            !isCurrentUserClient
+          ) {
             addNotification(
-              createMilestoneNotification("approved", escrowId, milestoneIndex, {
-                projectTitle: metadata.title,
-              }),
+              createMilestoneNotification(
+                "approved",
+                escrowId,
+                milestoneIndex,
+                {
+                  projectTitle: metadata.title,
+                }
+              ),
               [freelancerAddress],
-              true // Skip current user (client)
+              false // Current user is the recipient (freelancer)
             );
 
             toast({
@@ -877,7 +947,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           try {
             unsubscribe();
           } catch (error) {
-            console.error("Error unsubscribing from milestone rejections:", error);
+            console.error(
+              "Error unsubscribing from milestone rejections:",
+              error
+            );
           }
         }
       );
@@ -934,14 +1007,32 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           const clientAddress = metadata.client;
 
           // Only notify the freelancer, not the client who rejected
-          if (freelancerAddress && clientAddress && freelancerAddress.toLowerCase() !== clientAddress.toLowerCase()) {
+          // Verify current user is the freelancer (recipient), not the client (sender)
+          const currentUserAddress = wallet.address?.toLowerCase();
+          const isCurrentUserFreelancer =
+            freelancerAddress?.toLowerCase() === currentUserAddress;
+          const isCurrentUserClient =
+            clientAddress?.toLowerCase() === currentUserAddress;
+
+          if (
+            freelancerAddress &&
+            clientAddress &&
+            freelancerAddress.toLowerCase() !== clientAddress.toLowerCase() &&
+            isCurrentUserFreelancer &&
+            !isCurrentUserClient
+          ) {
             addNotification(
-              createMilestoneNotification("rejected", escrowId, milestoneIndex, {
-                reason,
-                projectTitle: metadata.title,
-              }),
+              createMilestoneNotification(
+                "rejected",
+                escrowId,
+                milestoneIndex,
+                {
+                  reason,
+                  projectTitle: metadata.title,
+                }
+              ),
               [freelancerAddress],
-              true // Skip current user (client)
+              false // Current user is the recipient (freelancer)
             );
 
             toast({
@@ -981,6 +1072,156 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     JSON.stringify(escrowMetadata),
   ]);
 
+  // Subscribe to dispute events for all user's escrows (both client and freelancer owned)
+  useEffect(() => {
+    if (
+      !wallet.isConnected ||
+      !wallet.address ||
+      !subscribeToDisputes ||
+      (clientEscrowIds.length === 0 && freelancerEscrowIds.length === 0)
+    ) {
+      Object.values(disputeSubscriptions.current).forEach((unsubscribe) => {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error("Error unsubscribing from disputes:", error);
+        }
+      });
+      disputeSubscriptions.current = {};
+      processedDisputes.current.clear();
+      return;
+    }
+
+    const activeSubscriptions = disputeSubscriptions.current;
+    const allEscrowIds = [
+      ...new Set([...clientEscrowIds, ...freelancerEscrowIds]),
+    ];
+    const escrowIdSet = new Set(allEscrowIds);
+
+    // Unsubscribe from escrows no longer relevant
+    Object.keys(activeSubscriptions).forEach((escrowId) => {
+      if (!escrowIdSet.has(escrowId)) {
+        try {
+          activeSubscriptions[escrowId]?.();
+        } catch (error) {
+          console.error("Error unsubscribing from escrow:", escrowId, error);
+        }
+        delete activeSubscriptions[escrowId];
+      }
+    });
+
+    // Subscribe to disputes for all user's escrows
+    allEscrowIds.forEach((escrowId) => {
+      if (activeSubscriptions[escrowId]) {
+        return;
+      }
+
+      subscribeToDisputes(escrowId, (data) => {
+        try {
+          const fields = data.data || data;
+          const milestoneIndexField = fields.find(
+            (f: any) => f.name === "milestoneIndex"
+          );
+          const initiatorField = fields.find(
+            (f: any) => f.name === "initiator"
+          );
+          const timestampField = fields.find(
+            (f: any) => f.name === "timestamp"
+          );
+
+          const milestoneIndex = Number(milestoneIndexField?.value || 0);
+          const initiatorAddress = initiatorField?.value?.toString() || "";
+          const eventKey = `${escrowId}-${milestoneIndex}-${
+            timestampField?.value || Date.now()
+          }`;
+
+          if (processedDisputes.current.has(eventKey)) {
+            return;
+          }
+          processedDisputes.current.add(eventKey);
+
+          const metadata = escrowMetadata[escrowId] || {
+            title: `Project #${escrowId}`,
+          };
+          const freelancerAddress = metadata.freelancer;
+          const clientAddress = metadata.client;
+          const currentUserAddress = wallet.address?.toLowerCase();
+
+          // Determine who should be notified (the party that didn't create the dispute)
+          let recipientAddress: string | undefined;
+          let isCurrentUserRecipient = false;
+
+          if (initiatorAddress.toLowerCase() === clientAddress?.toLowerCase()) {
+            // Client created the dispute, notify freelancer
+            recipientAddress = freelancerAddress;
+            isCurrentUserRecipient =
+              freelancerAddress?.toLowerCase() === currentUserAddress;
+          } else if (
+            initiatorAddress.toLowerCase() === freelancerAddress?.toLowerCase()
+          ) {
+            // Freelancer created the dispute, notify client
+            recipientAddress = clientAddress;
+            isCurrentUserRecipient =
+              clientAddress?.toLowerCase() === currentUserAddress;
+          }
+
+          // Only notify if current user is the recipient (not the initiator)
+          if (
+            recipientAddress &&
+            isCurrentUserRecipient &&
+            initiatorAddress.toLowerCase() !== currentUserAddress
+          ) {
+            addNotification(
+              createMilestoneNotification(
+                "disputed",
+                escrowId,
+                milestoneIndex,
+                {
+                  projectTitle: metadata.title,
+                  reason: "A dispute has been opened for this milestone",
+                }
+              ),
+              [recipientAddress],
+              false // Current user is the recipient
+            );
+
+            toast({
+              title: "Milestone Disputed",
+              description: `Milestone ${
+                milestoneIndex + 1
+              } has been disputed for ${metadata.title}`,
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
+          console.error("Error processing dispute event:", error);
+        }
+      })
+        .then((unsubscribe) => {
+          if (unsubscribe) {
+            activeSubscriptions[escrowId] = unsubscribe;
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Error subscribing to disputes for escrow:",
+            escrowId,
+            error
+          );
+        });
+    });
+
+    return () => {
+      // Cleanup handled separately
+    };
+  }, [
+    wallet.isConnected,
+    wallet.address,
+    subscribeToDisputes,
+    [...clientEscrowIds, ...freelancerEscrowIds].join(","),
+    JSON.stringify(escrowMetadata),
+  ]);
+
   const addNotification = (
     notification: Omit<Notification, "id" | "timestamp" | "read">,
     targetAddresses?: string[], // Optional: specific addresses to notify
@@ -1009,30 +1250,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       setNotifications((prev) => [newNotification, ...prev]);
     }
 
-    // If target addresses are specified, also store for those addresses (cross-wallet notifications)
-    if (targetAddresses && targetAddresses.length > 0) {
-      targetAddresses.forEach((address) => {
-        if (address) {
-          const addressLower = address.toLowerCase();
-          // Skip if it's the current user and we already added it above
-          if (addressLower === currentUserAddress && shouldNotifyCurrentUser) {
-            return;
-          }
-
-          const existingNotifications = JSON.parse(
-            localStorage.getItem(`notifications_${addressLower}`) || "[]"
-          );
-          const updatedNotifications = [
-            newNotification,
-            ...existingNotifications,
-          ];
-          localStorage.setItem(
-            `notifications_${addressLower}`,
-            JSON.stringify(updatedNotifications)
-          );
-        }
-      });
-    }
+    // NOTE: Cross-wallet notifications are handled by Somnia Data Streams subscriptions.
+    // The subscriptions automatically detect on-chain events and notify users regardless of
+    // which wallet/browser they're using. No localStorage needed - events are indexed on-chain.
+    //
+    // When a user performs an action (e.g., approves a milestone), the blockchain event is
+    // indexed by Somnia Data Streams. The subscription for the recipient (e.g., freelancer
+    // subscribed to milestone approvals) will automatically detect the event and notify them,
+    // even if they're using a different wallet/browser.
 
     // Show toast for important notifications
     if (notification.type === "milestone" || notification.type === "dispute") {
@@ -1081,43 +1306,52 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       read: false,
     };
 
-    // Always add to current user's notifications
-    setNotifications((prev) => [newNotification, ...prev]);
+    const currentUserAddress = wallet.address?.toLowerCase();
 
     // Collect all target addresses (both client and freelancer)
+    // Only include addresses that are NOT the current user (the one performing the action)
     const targetAddresses = [];
-    if (
-      clientAddress &&
-      clientAddress.toLowerCase() !== wallet.address?.toLowerCase()
-    ) {
+    if (clientAddress && clientAddress.toLowerCase() !== currentUserAddress) {
       targetAddresses.push(clientAddress.toLowerCase());
     }
     if (
       freelancerAddress &&
-      freelancerAddress.toLowerCase() !== wallet.address?.toLowerCase()
+      freelancerAddress.toLowerCase() !== currentUserAddress
     ) {
       targetAddresses.push(freelancerAddress.toLowerCase());
     }
 
-    // Send to all target addresses
-    targetAddresses.forEach((address) => {
-      const existingNotifications = JSON.parse(
-        localStorage.getItem(`notifications_${address}`) || "[]"
-      );
-      const updatedNotifications = [newNotification, ...existingNotifications];
-      localStorage.setItem(
-        `notifications_${address}`,
-        JSON.stringify(updatedNotifications)
-      );
-    });
+    // Only add to current user's notifications if they're a target (recipient), not the sender
+    const isCurrentUserRecipient = targetAddresses.some(
+      (addr) => addr === currentUserAddress
+    );
 
-    // Show toast for important notifications
-    if (notification.type === "milestone" || notification.type === "dispute") {
-      toast({
-        title: notification.title,
-        description: notification.message,
-      });
+    if (isCurrentUserRecipient && currentUserAddress) {
+      setNotifications((prev) => [newNotification, ...prev]);
+
+      // Show toast only if current user is a recipient (not the sender)
+      if (
+        notification.type === "milestone" ||
+        notification.type === "dispute"
+      ) {
+        toast({
+          title: notification.title,
+          description: notification.message,
+        });
+      }
     }
+
+    // NOTE: Cross-wallet notifications are handled by Somnia Data Streams subscriptions.
+    // The subscriptions automatically detect on-chain events and notify users regardless of
+    // which wallet/browser they're using. No localStorage needed - events are indexed on-chain.
+    //
+    // Active subscriptions:
+    // - subscribeToMilestoneSubmissions: Notifies clients when freelancers submit milestones
+    // - subscribeToMilestoneApprovals: Notifies freelancers when clients approve milestones
+    // - subscribeToMilestoneRejections: Notifies freelancers when clients reject milestones
+    // - subscribeToEscrowStatus: Notifies clients when escrow status changes (e.g., work started)
+    // - subscribeToApplications: Notifies clients when freelancers apply for jobs
+    // - subscribeToDisputes: Notifies the other party when a dispute is created (client or freelancer)
   };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
