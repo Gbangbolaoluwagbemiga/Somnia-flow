@@ -785,6 +785,11 @@ export default function DashboardPage() {
 
               // Refresh from blockchain in background to ensure accuracy
               fetchUserEscrows().catch(console.error);
+
+              // Reload page after a short delay to ensure all data is updated
+              setTimeout(() => {
+                window.location.reload();
+              }, 3000);
             } else if (status === 5) {
               // Milestone rejected (Status 5, not 3)
               console.log(
@@ -933,6 +938,11 @@ export default function DashboardPage() {
 
               // Refresh from blockchain
               fetchUserEscrows().catch(console.error);
+
+              // Reload page after a short delay to ensure all data is updated
+              setTimeout(() => {
+                window.location.reload();
+              }, 3000);
             }
           } catch (error) {
             console.error("Error processing milestone approval:", error);
@@ -1621,10 +1631,15 @@ export default function DashboardPage() {
       if (!contract) return;
 
       setSubmittingMilestone(escrowId);
-      
+
       // Send transaction and get hash
-      const txHash = await contract.send("disputeMilestone", escrowId, 0, "General dispute");
-      
+      const txHash = await contract.send(
+        "disputeMilestone",
+        escrowId,
+        0,
+        "General dispute"
+      );
+
       // Wait for transaction receipt
       let receipt;
       let attempts = 0;
@@ -1646,7 +1661,7 @@ export default function DashboardPage() {
       if (receipt && receipt.status === "0x1") {
         // Get escrow data for notification
         const escrow = escrows.find((e) => e.id === escrowId);
-        
+
         // Send notification to freelancer
         if (escrow) {
           const freelancerAddress = escrow.beneficiary;
@@ -1689,7 +1704,8 @@ export default function DashboardPage() {
       console.error("Error opening dispute:", error);
       toast({
         title: "Dispute Failed",
-        description: error.message || "Could not open dispute. Please try again.",
+        description:
+          error.message || "Could not open dispute. Please try again.",
         variant: "destructive",
       });
       setSubmittingMilestone(null);
@@ -1904,7 +1920,7 @@ export default function DashboardPage() {
           refreshAttempts++;
           try {
             await fetchUserEscrows();
-            
+
             if (refreshAttempts === 1) {
               toast({
                 title: "Indexer Processing",
@@ -1913,11 +1929,15 @@ export default function DashboardPage() {
             } else if (refreshAttempts === maxRefreshAttempts) {
               toast({
                 title: "Dashboard Updated",
-                description: "Milestone status has been refreshed from blockchain",
+                description:
+                  "Milestone status has been refreshed from blockchain",
               });
             }
           } catch (error) {
-            console.error(`Error refreshing escrows (attempt ${refreshAttempts}):`, error);
+            console.error(
+              `Error refreshing escrows (attempt ${refreshAttempts}):`,
+              error
+            );
           }
 
           // Schedule next refresh if not at max attempts
